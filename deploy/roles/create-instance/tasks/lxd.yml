@@ -1,0 +1,64 @@
+---
+- name: Set GUEST_OS
+  ansible.builtin.set_fact:
+    GUEST_OS: "{{ ((dhis2_version | normalize_dhis2_version(dhis2_releases_list))['dhis2_version_major'] | get_dhis2_instance_specs(dhis2_auto_upgrade, version_results | default('')))['guest_os'] | first }}"
+    GUEST_OS_LIST: "{{ ((dhis2_version | normalize_dhis2_version(dhis2_releases_list))['dhis2_version_major'] | get_dhis2_instance_specs(dhis2_auto_upgrade, version_results | default('')))['guest_os'] }}"
+
+- name: Creating dhis2 containers
+  become: true
+  vars:
+    ansible_connection: local
+  community.general.lxd_container:
+    config:
+      boot.autostart.priority: "2"
+      user.type: "{{ group_names[0] }}"
+    name: "{{ inventory_hostname }}"
+    state: started
+    profiles: [default]
+    ignore_volatile_options: false
+    wait_for_ipv4_addresses: true
+    timeout: 600
+    source:
+      type: image
+      mode: pull
+      server: "{{ lxd_source_server | default('https://cloud-images.ubuntu.com/releases') }}"
+      protocol: "{{ lxd_source_protocol | default('simplestreams') }}"
+      alias: "{{ GUEST_OS | default(guest_os) }}/{{ guest_os_arch | default('amd64') }}"
+    devices:
+      eth0:
+        nictype: bridged
+        parent: "{{ lxd_bridge_interface | default('lxdbr1') }}"
+        type: nic
+        ipv4.address: "{{ ansible_host | ansible.utils.ipaddr(lxd_network) }}"
+  register: create_lxd_container_status
+
+- name: Gethering facts
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+      - "!min"
+  tags: [always]
+
+- name: Ensuring container has configured static ip address
+  become: true
+  vars:
+    ansible_connection: local
+  community.general.lxd_container:
+    name: "{{ inventory_hostname }}"
+    state: restarted
+    wait_for_ipv4_addresses: true
+  when:
+    - ansible_host != ansible_facts['default_ipv4']['address']
+  register: restart_lxd_container_status
+
+- name: Wait for systemd to be ready
+  ansible.builtin.wait_for:
+    path: /run/systemd/system
+    state: present
+    timeout: 10
+  become: true
+  when: create_lxd_container_status.changed or restart_lxd_container_status.changed
+
+- name: Ensure timezone is {{ timezone }}
+  community.general.timezone:
+    name: "{{ timezone }}"

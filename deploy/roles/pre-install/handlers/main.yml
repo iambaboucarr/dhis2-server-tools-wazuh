@@ -1,0 +1,22 @@
+---
+# handlers file for ./roles/
+- name: Reload UFW
+  vars:
+    ansible_connection: local
+  become: true
+  become_user: root
+  community.general.ufw:
+    state: reloaded
+
+# Restarting unattended-upgrades
+- name: Restart Unattended-upgrades
+  vars:
+    ansible_connection: local
+  ansible.builtin.service:
+    name: unattended-upgrades
+    state: restarted
+
+- name: Restart Munin-Node
+  ansible.builtin.service:
+    name: munin-node
+    state: restarted

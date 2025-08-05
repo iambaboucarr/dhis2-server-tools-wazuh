@@ -1,0 +1,101 @@
+---
+- name: Open http port {{ http_port | default('80') }}
+  community.general.ufw:
+    rule: allow
+    port: "{{ http_port | default('80') }}"
+    proto: tcp
+    comment: http
+    state: enabled
+
+- name: Open https port {{ https_port | default('443') }}
+  community.general.ufw:
+    rule: allow
+    port: "{{ https_port | default('443') }}"
+    proto: tcp
+    comment: https
+
+- name: Ensure apache2 is stopped and disabled
+  ansible.builtin.service:
+    name: apache2
+    enabled: false
+    state: stopped
+  register: unused_disable
+  failed_when: unused_disable is failed and ('find' not in unused_disable.msg and 'found' not in unused_disable.msg)  # this prevents failing when the service is not found
+
+- name: Updating and Upgrading
+  ansible.builtin.apt:
+    upgrade: "yes"
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Installing Nginx
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - libwww-perl   # required for munin monitoring
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Disabling nginx version show
+  ansible.builtin.lineinfile:
+    dest: /etc/nginx/nginx.conf
+    regex: .*server_tokens off
+    line: "\tserver_tokens off;"
+    insertafter: types_hash_max_size
+  notify: Reload Nginx
+
+- name: Nginx Perfomance Loging
+  ansible.builtin.blockinfile:
+    path: /etc/nginx/nginx.conf
+    block: |
+      # Define a custom log format for performance logging
+              log_format performance '$remote_addr\t$remote_user\t[$time_local]\t"$request"\t'
+                          '$status\t$body_bytes_sent\t"$http_referer"\t"$http_user_agent"\t'
+                          '$request_time';
+      # Set up access log using the "performance" format (equivalent to Apache's perf.log)
+              access_log /var/log/nginx/perf.log performance;
+    marker: "# {mark} PERFORMANCE LOG FORMAT"  # Add a marker to easily identify and update the block
+    insertafter: "http {"
+  tags: [nginx-perf-log]
+  notify: Reload Nginx
+
+- name: Remove default nginx site
+  ansible.builtin.file:
+    name: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Generating Diffie–Hellman key parameters, takes a while, you may grab some coffee
+  ansible.builtin.command: openssl dhparam -out /etc/nginx/dhparams.pem 2048
+  args:
+    creates: /etc/nginx/dhparams.pem
+  notify: Reload Nginx
+
+- name: Creating nginx config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - '/etc/nginx/conf.d/upstream'
+    - '/etc/nginx/static/'
+  register: upstream_directory
+
+- name: Location configs {{ server_monitoring }}
+  ansible.builtin.template:
+    src: nginx/{{ server_monitoring | trim }}.j2
+    dest: /etc/nginx/conf.d/upstream/{{ server_monitoring }}.conf
+    owner: root
+    group: root
+    mode: "0640"
+    # force: false
+  loop: "{{ groups['monitoring'] }}"
+  notify: Reload Nginx
+  when:
+    - groups['monitoring'] | length > 0
+    - server_monitoring is defined
+
+- name: Flushing handlers
+  ansible.builtin.meta: flush_handlers

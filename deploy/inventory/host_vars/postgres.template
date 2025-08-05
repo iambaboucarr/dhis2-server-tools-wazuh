@@ -1,0 +1,19 @@
+# Postgresql optimization
+# Copy the file postgres.template to postgres (or generally, the name of your
+# database host ) using cp command. i.e cp postgres.template postgres
+
+# number of open connnectins to postgres database 
+pg_max_connections: 200
+
+# Shared Buffers for postgresql, recommended 0.25 x Available_RAM for PostgreSQL
+pg_shared_buffers: 8GB
+
+# PostgreSQL work memory, Recommended = (0.25 x Available_RAM)/max_connections
+pg_work_mem: 20MB
+
+# As much as you can reasonably afford. Helps with index generation during the analytics generation task
+pg_maintenance_work_mem: 3GB 
+
+# Approx 80% of ( Available RAM - maintenance_work_mem - max_connections * work_mem)
+pg_effective_cache_size: 10GB 
+

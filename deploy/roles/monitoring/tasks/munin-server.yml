@@ -1,0 +1,57 @@
+---
+- name: Update and upgrade packages
+  ansible.builtin.apt:
+    upgrade: "yes"
+    cache_valid_time: 3600
+    update_cache: true
+
+- name: Install munin server
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    name:
+      - apache2
+      - libcgi-fast-perl
+      - libapache2-mod-fcgid
+      - munin
+      - python3-passlib
+
+- name: Copy munin configurations.
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  with_items:
+    - src: munin.conf.j2
+      dest: /etc/munin/munin.conf
+    - src: hosts.conf.j2
+      dest: "{{ munin_conf_d_directory }}/hosts.conf"
+
+- name: "Copy munin configuration for its access via apache2 proxy "
+  ansible.builtin.template:
+    dest: /etc/apache2/sites-available/munin.conf
+    src: apache2.conf.j2
+    mode: "0644"
+    owner: root
+    group: root
+
+- name: Enable apache2 configuration for munin access from the web.
+  ansible.builtin.file:
+    src: /etc/apache2/sites-available/munin.conf
+    dest: /etc/apache2/sites-enabled/munin.conf
+    state: link
+    owner: root
+    mode: "0644"
+  notify: Restart Apache2
+
+- name: Allow https access from proxy
+  community.general.ufw:
+    rule: allow
+    port: "{{ munin_http_port | default('80') }}"
+    src: "{{ hostvars[item]['ansible_host'] }}"
+    proto: tcp
+    comment: "Allow access from {{ item }} instance "
+    state: enabled
+  loop: "{{ groups['web'] }}"

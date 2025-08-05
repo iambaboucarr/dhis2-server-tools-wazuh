@@ -1,0 +1,44 @@
+---
+- name: Restart Apache2
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
+
+- name: Reload Apache2
+  ansible.builtin.service:
+    name: apache2
+    state: reloaded
+
+- name: Restart Munin
+  ansible.builtin.service:
+    name: munin
+    state: restarted
+
+- name: Restart Munin-Node
+  ansible.builtin.service:
+    name: munin-node
+    state: restarted
+
+- name: Restart Grafana
+  ansible.builtin.service:
+    name: grafana-server
+    state: restarted
+
+- name: Restart postgres_exporter
+  ansible.builtin.systemd:
+    name: postgres_exporter.service
+    state: restarted
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Reload Prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    state: reloaded
+
+- name: Reload Postgresql
+  ansible.builtin.systemd:
+    name: postgresql
+    state: reloaded

@@ -1,0 +1,30 @@
+---
+# handlers file for ./roles/postgresql
+# Restart postgresql service
+- name: Restart Postgres
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+
+# Reload postgresql service
+- name: Reload Postgres
+  ansible.builtin.service:
+    name: postgresql
+    state: reloaded
+
+- name: Restart Munin-node
+  ansible.builtin.service:
+    name: munin-node
+    state: restarted
+
+- name: Reload Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+    enabled: true
+
+- name: Reload Apache2
+  ansible.builtin.service:
+    name: apache2
+    state: reloaded
+    enabled: true

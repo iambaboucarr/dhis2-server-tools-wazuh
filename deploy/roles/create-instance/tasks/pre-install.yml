@@ -1,0 +1,65 @@
+---
+- name: Assert running LTS release
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution_version'] in GUEST_OS_LIST
+    fail_msg: "Running distribution {{ ansible_facts['distribution_version'] }} must be in {{ GUEST_OS_LIST }}"
+    quiet: true
+    # success_msg: "Running distribution  correct for {{ dhis2_version }} proceeding with install"
+
+- name: Ensure timezone is {{ timezone }}
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Ensure secrets directory exists
+  vars:
+    ansible_connection: local
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0700'
+    owner: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('pipe', 'id -gn') | trim }}"
+  tags: [never]
+  delegate_to: 127.0.0.1
+  loop:
+    - "/opt/ansible/"
+    - "/opt/ansible/secrets/"
+
+- name: Ensure db_password files are owned by {{ lookup('env', 'USER') }}
+  vars:
+    ansible_connection: local
+  become: true
+  ansible.builtin.file:
+    dest: "{{ item }}"
+    owner: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('pipe', 'id -gn') | trim }}"
+    mode: '0600'
+  delegate_to: 127.0.0.1
+  with_fileglob:
+    - /opt/ansible/secrets/*
+  when: item is file
+  tags: [never]
+
+- name: Generate {{ inventory_hostname }} db_password
+  vars:
+    ansible_connection: local
+  become: true
+  ansible.builtin.set_fact:
+    db_password: "{{ db_password | default(lookup('password', '/opt/ansible/secrets/' + inventory_hostname)) }}"   # psd in a file on controller
+  when:
+    - create_db is defined and  create_db | bool and db_password is not defined
+  tags: [db_password_generate]
+
+- name: Setting tomcat verson
+  ansible.builtin.set_fact:
+    tomcat_version: "{{ ansible_facts['distribution_version'] | tomcat_version }}"
+  tags: [set-dhis2-url, deploy-war]
+
+- name: Check running dhis2 version
+  ansible.builtin.shell:
+    cmd: unzip -q -p  /var/lib/tomcat{{ tomcat_version }}/webapps/{{ dhis2_base_path | default(inventory_hostname) | to_fixed_string }}/WEB-INF/lib/dhis-service-core-*.jar build.properties | awk -F' *= *' '$1=="build.version"{print $2}'
+    removes: /var/lib/tomcat{{ tomcat_version }}/webapps/{{ dhis2_base_path | default(inventory_hostname) | to_fixed_string }}/WEB-INF/lib/dhis-service-core-*.jar
+  register: version_results
+  changed_when: false
+  tags: [set-dhis2-url, deploy-war]  #  running dhis2 instance feeds into set-url logic

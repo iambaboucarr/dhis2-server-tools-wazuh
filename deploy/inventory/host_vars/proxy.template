@@ -1,0 +1,12 @@
+---
+# This is a template for variables to be applied to proxy host.
+# use the template to create the file named 'proxy' 
+# the file name should correspond to the host you want to apply variables to.
+# in our case proxy 
+
+munin_users:
+  - name: "{{ munin_username | default('admin') }}"
+    password: "{{ munin_password | default('district') }}"
+
+# if you want munin access from non-default, change the below variable.  Default is munin
+munin_base_path: munin 

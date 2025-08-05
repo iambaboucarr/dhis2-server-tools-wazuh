@@ -1,0 +1,15 @@
+---
+- name: Set Ansible connection to local
+  vars:
+    ansible_connection: local
+  ansible.builtin.set_fact:
+    ansible_connection: local
+
+- name: Gathering facts
+  ansible.builtin.setup:
+    gather_subset:
+      - os_family
+
+# Gather facts and run deplayment based on the discovered controller
+- name: Deploying dhis2 via ssh from {{ ansible_os_family }} controller"
+  ansible.builtin.include_tasks: "{{ ansible_os_family }}.yml"

@@ -1,0 +1,9 @@
+- name: "Monitoring setup"
+  gather_facts: false
+  hosts: all:!127.0.0.1
+  force_handlers: true
+  become: true
+  vars_files:
+    - ../vars/vars.yml
+  roles:
+    - role: monitoring

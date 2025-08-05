@@ -1,0 +1,28 @@
+---
+- name: Sanitize dhis2_version_major
+  ansible.builtin.set_fact:
+    normalized_dhis2_version: "{{ (dhis2_version | normalize_dhis2_version(dhis2_releases_list)) }}"
+
+- name: Set DHIS2 release version
+  ansible.builtin.set_fact:
+    dhis2_release_version: "{{ (dhis2_releases_list | selectattr('name', 'eq', normalized_dhis2_version['dhis2_version_major']) | list) | first }}"
+
+- name: Set patchversion_name
+  ansible.builtin.set_fact:
+    latest_patchversion_name: "{{ (dhis2_release_version['patchVersions'] | last)['name'] | default(dhis2_release_version['name']) }}"
+
+- name: Set dhis2_latest_patchversion and sha256
+  ansible.builtin.set_fact:
+    sha256: "{{ dhis2_release_version['sha256'] | default(omit) }}"
+    latest_patchversion_url: "{{ (dhis2_release_version['patchVersions'] | last)['url'] | default(dhis2_release_version['latestStableUrl']) }}"
+    latest_stable_url: "{{ dhis2_release_version['latestStableUrl'] }}"
+    patchversion_name: "{{ (dhis2_release_version['patchVersions'] | selectattr('name', 'eq', normalized_dhis2_version['dhis2_version_minor']) | first)['name'] | default(latest_patchversion_name) }}"
+
+# Use latest_stable_url instead of latest_patchversion_url, since latest_patchversion_url is not set in all dhis2_versions  defined in releases.json file
+- name: Set dhis2__url, defaults to latestPatchVersion
+  ansible.builtin.set_fact:
+    dhis2_url: "{{ (dhis2_release_version['patchVersions'] | selectattr('name', 'eq', normalized_dhis2_version['dhis2_version_minor']) | first)['url'] | default(latest_stable_url) }}"
+
+- name: Set java_version
+  ansible.builtin.set_fact:
+    java_version: "{{ (normalized_dhis2_version['dhis2_version_major'] | get_dhis2_instance_specs(dhis2_auto_upgrade, version_results)).jdk }}"

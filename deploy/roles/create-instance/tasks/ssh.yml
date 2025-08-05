@@ -1,0 +1,23 @@
+---
+- name: Set GUEST_OS
+  ansible.builtin.set_fact:
+    GUEST_OS: "{{ ((dhis2_version | normalize_dhis2_version(dhis2_releases_list))['dhis2_version_major'] | get_dhis2_instance_specs(dhis2_auto_upgrade, version_results | default('')))['guest_os'] | first }}"
+    GUEST_OS_LIST: "{{ ((dhis2_version | normalize_dhis2_version(dhis2_releases_list))['dhis2_version_major'] | get_dhis2_instance_specs(dhis2_auto_upgrade, version_results | default('')))['guest_os'] }}"
+
+- name: Get host facts
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+      - "!min"
+
+- name: Allow ssh on port 22
+  community.general.ufw:
+    rule: limit
+    port: "{{ ansible_port | default('22') }}"
+    src: "0.0.0.0/0"
+    proto: tcp
+    comment: Allow ssh access to the instance
+
+- name: Ensure timezone is {{ timezone }}
+  community.general.timezone:
+    name: "{{ timezone }}"

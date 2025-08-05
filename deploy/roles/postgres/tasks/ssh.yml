@@ -1,0 +1,31 @@
+---
+- name: Get host facts
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+      - "!min"
+
+- name: Installing acl package
+  become: true
+  ansible.builtin.apt:
+    name: acl
+    state: present
+    update_cache: true
+  when: inventory_hostname in groups['databases']
+
+- name: Ensure timezone is {{ timezone }}
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Allow ssh on port 22
+  community.general.ufw:
+    rule: limit
+    port: "{{ ansible_port | default('22') }}"
+    src: "0.0.0.0/0"
+    proto: tcp
+    comment: Allow ssh access to the instance
+
+- name: Installing postgreSQL-{{ postgresql_version }}
+  ansible.builtin.include_tasks: pg-install.yml
+  tags:
+    - postgresql-config
