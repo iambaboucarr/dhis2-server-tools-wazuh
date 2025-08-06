@@ -26,6 +26,52 @@
         - groups['wazuh_managers'] is not defined or groups['wazuh_managers'] | length == 0
       run_once: true
 
+- name: Create Wazuh LXD containers if needed
+  hosts: wazuh_managers:wazuh_indexers:wazuh_dashboards
+  gather_facts: false
+  tasks:
+    - name: Create Wazuh container
+      become: true
+      vars:
+        ansible_connection: local
+      community.general.lxd_container:
+        config:
+          boot.autostart.priority: "2"
+          user.type: "wazuh"
+        name: "{{ inventory_hostname }}"
+        state: started
+        profiles: [default]
+        ignore_volatile_options: false
+        wait_for_ipv4_addresses: true
+        timeout: 600
+        source:
+          type: image
+          mode: pull
+          server: "{{ lxd_source_server | default('https://cloud-images.ubuntu.com/releases') }}"
+          protocol: "{{ lxd_source_protocol | default('simplestreams') }}"
+          alias: "{{ guest_os | default('22.04') }}/{{ guest_os_arch | default('amd64') }}"
+        devices:
+          eth0:
+            nictype: bridged
+            parent: "{{ lxd_bridge_interface | default('lxdbr1') }}"
+            type: nic
+            ipv4.address: "{{ ansible_host | ansible.utils.ipaddr(lxd_network) }}"
+      when: 
+        - enable_wazuh_monitoring | default('no') | bool
+        - ansible_connection == 'lxd'
+      delegate_to: 127.0.0.1
+      run_once: true
+
+    - name: Wait for systemd to be ready in Wazuh container
+      ansible.builtin.wait_for:
+        path: /run/systemd/system
+        state: present
+        timeout: 30
+      become: true
+      when: 
+        - enable_wazuh_monitoring | default('no') | bool
+        - ansible_connection == 'lxd'
+
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
   become: true
