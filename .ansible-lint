@@ -29,20 +29,7 @@ skip_list:
   - risky-shell-pipe  # Some shell commands need pipes
 
 # Configure specific rules
-rules:
-  line-length:
-    max: 120
-  truthy:
-    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
-  braces:
-    max-spaces-inside: 1
-    min-spaces-inside: 0
-  brackets:
-    max-spaces-inside: 1
-    min-spaces-inside: 0
-  octal-values:
-    forbid-implicit-octal: true
-    forbid-explicit-octal: false
+# Note: Some rule configurations are limited in newer ansible-lint versions
 
 # Mock modules and roles that might not be available during linting
 mock_modules:
@@ -51,9 +38,3 @@ mock_modules:
 
 mock_roles: []
 
-# Use specific Ansible version for linting
-supported_python:
-  - "3.9"
-  - "3.10" 
-  - "3.11"
-  - "3.12"

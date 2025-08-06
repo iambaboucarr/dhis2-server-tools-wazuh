@@ -1,21 +1,551 @@
 ---
-- name: Deploy Wazuh Security Monitoring
-  hosts: wazuh
-  become: true
-  gather_facts: true
-  tags: [wazuh, wazuh-server, security]
-  vars_files:
-    - vars/vars.yml
-  roles:
-    - role: wazuh-server
+# Wazuh deployment using official Wazuh Ansible roles
+# https://github.com/wazuh/wazuh-ansible
+#
+# This playbook is controlled by the 'enable_wazuh_monitoring' flag in inventory
 
-- name: Install Wazuh agents on all containers
-  hosts: all:!wazuh:!127.0.0.1
+- name: Validate Wazuh Configuration
+  hosts: 127.0.0.1
+  gather_facts: false
+  tasks:
+    - name: Check if Wazuh monitoring is enabled
+      ansible.builtin.debug:
+        msg: "Wazuh monitoring is enabled. Proceeding with deployment..."
+      when: enable_wazuh_monitoring | default('no') | bool
+
+    - name: Skip Wazuh deployment if disabled
+      ansible.builtin.debug:
+        msg: "Wazuh monitoring is disabled. Skipping Wazuh deployment."
+      when: not (enable_wazuh_monitoring | default('no') | bool)
+
+    - name: Validate required groups exist
+      ansible.builtin.fail:
+        msg: "Required Wazuh groups (wazuh_managers, wazuh_indexers, wazuh_dashboards) not found in inventory"
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - groups['wazuh_managers'] is not defined or groups['wazuh_managers'] | length == 0
+      run_once: true
+
+- name: Deploy Wazuh single-node or cluster using official roles
+  hosts: wazuh_managers
   become: true
   gather_facts: true
-  tags: [wazuh, wazuh-agent, security]
-  vars_files:
-    - vars/vars.yml
+  vars:
+    # Wazuh version configuration
+    wazuh_manager_version: "4.12.0-1"
+
+    # Single node deployment (set to false for cluster)
+    single_node: true
+
+    # Wazuh manager configuration
+    wazuh_manager_config:
+      cluster:
+        disabled: "{{ 'yes' if single_node else 'no' }}"
+        name: "wazuh-cluster"
+        node_name: "{{ ansible_hostname }}"
+        node_type: "master"
+        key: >-
+          {{ vault_wazuh_cluster_key
+            | default(lookup('password', '/tmp/wazuh_cluster_key', 'length=32 chars=ascii_letters,digits')) }}
+        bind_addr: "0.0.0.0"
+        nodes:
+          - "{{ ansible_default_ipv4.address }}"
+        hidden: "no"
+
+      vulnerability_detection:
+        enabled: "yes"
+        feed_update_interval: "60m"
+
+      logs:
+        level: "info"
+        format: "json"
+
+    # API configuration
+    wazuh_api_users:
+      - username: "admin"
+        password: >-
+          {{ vault_wazuh_api_password
+            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+
+    # Filebeat configuration for manager
+    filebeat_output_elasticsearch_hosts:
+      - "{{ hostvars[groups['wazuh_indexers'][0]]['ansible_default_ipv4']['address'] }}:9200"
+
+    # Security configuration
+    wazuh_manager_authd:
+      enable: true
+      port: 1515
+      use_password: true
+      password: >-
+        {{ vault_wazuh_authd_pass
+          | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
+      ssl_verify_host: "no"
+      ssl_manager_cert: "/var/ossec/etc/sslmanager.cert"
+      ssl_manager_key: "/var/ossec/etc/sslmanager.key"
+      ssl_auto_negotiate: "yes"
+
+  pre_tasks:
+    - name: Install required packages
+      ansible.builtin.package:
+        name:
+          - curl
+          - wget
+          - unzip
+          - software-properties-common
+          - libcap2-bin
+        state: present
+        update_cache: true
+
+    - name: Configure firewall for Wazuh manager (internal network only)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: tcp
+        src: "{{ item.src }}"
+        comment: "{{ item.comment }}"
+      loop:
+        - port: "1514"
+          src: "{{ ansible_default_ipv4.network }}/24"
+          comment: "Wazuh agent communication - internal network"
+        - port: "1515"
+          src: "{{ ansible_default_ipv4.network }}/24"
+          comment: "Wazuh agent enrollment - internal network"
+        - port: "1516"
+          src: "{{ ansible_default_ipv4.network }}/24"
+          comment: "Wazuh cluster communication - internal network"
+        - port: "55000"
+          src: "{{ '127.0.0.1' if ansible_connection != 'lxd' else ansible_default_ipv4.network + '/24' }}"
+          comment: "Wazuh API - SSH forwarding access"
+      when: ansible_connection != "docker"
+
   roles:
-    - role: wazuh-agent
-      when: groups['wazuh'] | length > 0
+    - role: wazuh-ansible/wazuh-ansible/roles/wazuh/ansible-wazuh-manager
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - single_node or inventory_hostname in groups['wazuh_managers']
+
+- name: Deploy Wazuh Indexer (OpenSearch)
+  hosts: wazuh_indexers
+  become: true
+  vars:
+    indexer_cluster_name: "wazuh-cluster"
+    indexer_node_name: "{{ ansible_hostname }}"
+    indexer_network_host: "{{ ansible_default_ipv4.address }}" # Bind to internal IP only
+    indexer_http_port: 9200
+    indexer_transport_tcp_port: 9300
+
+    # Security configuration
+    indexer_security_enabled: true
+    indexer_security_admin_password: >-
+      {{ vault_wazuh_indexer_admin_password
+        | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+
+    # Memory settings (adjust based on available RAM)
+    indexer_jvm_heap_size: "1g"
+
+  pre_tasks:
+    - name: Configure firewall for Indexer (internal network only)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: tcp
+        src: "{{ item.src }}"
+        comment: "{{ item.comment }}"
+      loop:
+        - port: "9200"
+          src: "{{ ansible_default_ipv4.network }}/24"
+          comment: "Wazuh Indexer REST API - internal network"
+        - port: "9300"
+          src: "{{ ansible_default_ipv4.network }}/24"
+          comment: "Wazuh Indexer transport - internal network"
+      when: ansible_connection != "docker"
+
+    - name: Set vm.max_map_count for OpenSearch
+      ansible.posix.sysctl:
+        name: vm.max_map_count
+        value: "262144"
+        sysctl_set: true
+        state: present
+        reload: true
+      when: ansible_connection != "docker"
+
+  roles:
+    - role: wazuh-ansible
+      when: enable_wazuh_monitoring | default('no') | bool
+
+- name: Deploy Wazuh Dashboard
+  hosts: wazuh_dashboards
+  become: true
+  vars:
+    # Bind to container IP if LXD, localhost otherwise (for SSH forwarding)
+    dashboard_server_host: >-
+      {{ ansible_default_ipv4.address if ansible_connection == 'lxd' else '127.0.0.1' }}
+    dashboard_server_port: 5601
+    dashboard_elasticsearch_url: >-
+      https://{{ hostvars[groups['wazuh_indexers'][0]]['ansible_default_ipv4']['address'] }}:9200
+    dashboard_elasticsearch_username: "admin"
+    dashboard_elasticsearch_password: >-
+      {{ vault_wazuh_indexer_admin_password
+        | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+
+  pre_tasks:
+    - name: Configure firewall for Dashboard (SSH forwarding access)
+      community.general.ufw:
+        rule: allow
+        port: "5601"
+        proto: tcp
+        src: "{{ '127.0.0.1' if ansible_connection != 'lxd' else ansible_default_ipv4.network + '/24' }}"
+        comment: "Wazuh Dashboard - SSH forwarding access"
+      when: ansible_connection != "docker"
+
+  roles:
+    - role: wazuh-ansible/wazuh-ansible/roles/wazuh/wazuh-dashboard
+      when: enable_wazuh_monitoring | default('no') | bool
+
+- name: Deploy Wazuh agent on LXD host server
+  hosts: 127.0.0.1
+  become: true
+  connection: local
+  vars:
+    wazuh_agent_version: "4.12.0-1"
+    wazuh_managers:
+      - address: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
+        port: 1514
+        protocol: tcp
+        api_port: 55000
+        api_protocol: https
+        api_user: "admin"
+        api_password: >-
+          {{ vault_wazuh_api_password
+            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+
+    wazuh_agent_authd:
+      registration_address: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
+      enable: true
+      port: 1515
+      use_password: true
+      password: >-
+        {{ vault_wazuh_authd_pass
+          | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
+      ssl_verify_host: "no"
+      ssl_auto_negotiate: "yes"
+
+    # Host-specific agent configuration for LXD monitoring
+    wazuh_agent_config:
+      log_format: "json"
+
+      # Monitor LXD host system logs
+      localfile:
+        - location: "/var/log/syslog"
+          log_format: "syslog"
+          label:
+            key: "lxd_host_syslog"
+        - location: "/var/log/auth.log"
+          log_format: "syslog"
+          label:
+            key: "lxd_host_auth"
+        - location: "/var/log/kern.log"
+          log_format: "syslog"
+          label:
+            key: "lxd_host_kernel"
+        - location: "/var/log/lxd/lxd.log"
+          log_format: "multi-line"
+          label:
+            key: "lxd_daemon"
+        - location: "/var/lib/lxd/logs/*.log"
+          log_format: "multi-line"
+          label:
+            key: "lxd_containers"
+
+      # File integrity monitoring for LXD host
+      syscheck:
+        directories:
+          - path: "/etc/lxd"
+            check_all: "yes"
+            realtime: "yes"
+          - path: "/var/lib/lxd/storage-pools"
+            check_all: "yes"
+          - path: "/etc/ssh"
+            check_all: "yes"
+            realtime: "yes"
+          - path: "/etc/sudoers.d"
+            check_all: "yes"
+            realtime: "yes"
+
+        ignore:
+          - "/var/lib/lxd/logs"
+          - "/tmp"
+          - "/var/tmp"
+
+      # System inventory for host
+      syscollector:
+        disabled: "no"
+        interval: "1h"
+        network: "yes"
+        os: "yes"
+        packages: "yes"
+        ports: "yes"
+        processes: "yes"
+
+      # Host-specific command monitoring
+      command:
+        - name: "lxc_list"
+          command: "/snap/bin/lxc list --format json"
+          frequency: 300
+          timeout: 30
+        - name: "lxd_storage"
+          command: "/snap/bin/lxc storage list --format json"
+          frequency: 600
+          timeout: 30
+
+  pre_tasks:
+    - name: Check if this is an LXD host
+      ansible.builtin.command: which lxc
+      register: lxc_check
+      changed_when: false
+      failed_when: false
+
+    - name: Skip if not LXD host
+      ansible.builtin.debug:
+        msg: "LXD not found on host, skipping agent installation"
+      when: lxc_check.rc != 0
+
+    - name: Get LXD host network info
+      ansible.builtin.setup:
+        gather_subset: network
+      when: lxc_check.rc == 0
+
+  roles:
+    - role: wazuh-ansible/wazuh-ansible/roles/wazuh/ansible-wazuh-agent
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - lxc_check.rc == 0
+
+- name: Deploy Wazuh agents on all DHIS2 containers
+  hosts: instances:web:databases:monitoring:integration
+  become: true
+  vars:
+    wazuh_agent_version: "4.12.0-1"
+    wazuh_managers:
+      - address: >-
+          {{ wazuh_manager_ip | default(
+            hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address']
+          ) }}
+        port: 1514
+        protocol: tcp
+        api_port: 55000
+        api_protocol: https
+        api_user: "admin"
+        api_password: >-
+          {{ vault_wazuh_api_password
+            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+
+    wazuh_agent_authd:
+      registration_address: >-
+        {{ wazuh_manager_ip
+          | default(hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address']) }}
+      enable: true
+      port: 1515
+      use_password: true
+      password: >-
+        {{ vault_wazuh_authd_pass
+          | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
+      ssl_verify_host: "no"
+      ssl_auto_negotiate: "yes"
+
+    # Agent configuration for DHIS2 monitoring
+    wazuh_agent_config:
+      log_format: "json"
+
+      # Monitor DHIS2 logs
+      localfile:
+        - location: "/opt/dhis2/logs/dhis.log"
+          log_format: "multi-line"
+          label:
+            key: "dhis2"
+        - location: "/opt/dhis2/tomcat/logs/catalina.out"
+          log_format: "multi-line"
+          label:
+            key: "tomcat"
+        - location: "/var/log/nginx/*.log"
+          log_format: "apache"
+          label:
+            key: "nginx"
+
+      # File integrity monitoring for DHIS2
+      syscheck:
+        directories:
+          - path: "/opt/dhis2/config"
+            check_all: "yes"
+            realtime: "yes"
+          - path: "/opt/dhis2/webapps"
+            check_all: "yes"
+          - path: "/etc/nginx"
+            check_all: "yes"
+
+        ignore:
+          - "/opt/dhis2/logs"
+          - "/opt/dhis2/temp"
+
+      # System inventory
+      syscollector:
+        disabled: "no"
+        interval: "1h"
+        network: "yes"
+        os: "yes"
+        packages: "yes"
+        ports: "yes"
+        processes: "yes"
+
+      # Active response
+      active_response:
+        disabled: "no"
+        ca_store: "/var/ossec/etc/wpk_root.pem"
+
+      # Vulnerability detection
+      vulnerability_detector:
+        enabled: "yes"
+        interval: "5m"
+        ignore_time: "6h"
+        run_on_start: "yes"
+
+  pre_tasks:
+    - name: Ensure Wazuh manager is reachable from LXD containers
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
+        port: 1514
+        timeout: 10
+      delegate_to: localhost
+      run_once: true
+      when: ansible_connection == "lxd"
+
+    - name: Get Wazuh manager IP for LXD networking
+      ansible.builtin.set_fact:
+        wazuh_manager_ip: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
+      when: groups['wazuh_managers'] is defined and groups['wazuh_managers'] | length > 0
+
+    - name: Check if container can reach Wazuh manager
+      ansible.builtin.shell: |
+        if command -v nc >/dev/null 2>&1; then
+          nc -z -w5 {{ wazuh_manager_ip }} 1514 && echo "reachable" || echo "not_reachable"
+        elif command -v telnet >/dev/null 2>&1; then
+          timeout 5 bash -c "</dev/tcp/{{ wazuh_manager_ip }}/1514" && echo "reachable" || echo "not_reachable"
+        else
+          echo "no_tools"
+        fi
+      register: connectivity_check
+      changed_when: false
+      failed_when: false
+      when: ansible_connection == "lxd"
+
+    - name: Install network tools if needed for LXD containers
+      ansible.builtin.package:
+        name:
+          - netcat-openbsd
+          - curl
+          - wget
+        state: present
+        update_cache: yes
+      when:
+        - ansible_connection == "lxd"
+        - connectivity_check.stdout | default('') == "no_tools"
+  roles:
+    - role: wazuh-ansible/wazuh-ansible/roles/wazuh/ansible-wazuh-agent
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - groups['wazuh_managers'] is defined and groups['wazuh_managers'] | length > 0
+        - connectivity_check is not defined or connectivity_check.stdout != "not_reachable"
+
+# Post-deployment validation
+- name: Validate Wazuh deployment
+  hosts: wazuh_managers
+  become: true
+  tasks:
+    - name: Skip validation if Wazuh monitoring is disabled
+      ansible.builtin.debug:
+        msg: "Wazuh monitoring is disabled, skipping validation"
+      when: not (enable_wazuh_monitoring | default('no') | bool)
+
+    - name: Check Wazuh manager service status
+      when: enable_wazuh_monitoring | default('no') | bool
+      ansible.builtin.systemd:
+        name: wazuh-manager
+        state: started
+      register: manager_status
+      failed_when: false
+
+    - name: Check Wazuh API availability
+      when: enable_wazuh_monitoring | default('no') | bool
+      ansible.builtin.uri:
+        url: "https://{{ ansible_default_ipv4.address }}:55000"
+        method: GET
+        validate_certs: false
+        status_code: [401, 200]
+      register: api_check
+      failed_when: false
+
+    - name: List connected agents
+      when: enable_wazuh_monitoring | default('no') | bool
+      ansible.builtin.shell: |
+        /var/ossec/bin/agent_control -l
+      register: agent_list
+      changed_when: false
+      failed_when: false
+
+    - name: Wait for agents to connect (up to 2 minutes)
+      when: enable_wazuh_monitoring | default('no') | bool
+      ansible.builtin.pause:
+        seconds: 30
+        prompt: "Waiting for agents to register with Wazuh manager..."
+
+    - name: Get updated agent list after deployment
+      when: enable_wazuh_monitoring | default('no') | bool
+      ansible.builtin.shell: |
+        /var/ossec/bin/agent_control -l
+      register: final_agent_list
+      changed_when: false
+      failed_when: false
+
+    - name: Display deployment summary
+      when: enable_wazuh_monitoring | default('no') | bool
+      ansible.builtin.debug:
+        msg:
+          - "=== Wazuh Deployment Summary ==="
+          - "Manager Status: {{ 'Running' if manager_status.state == 'started' else 'Not Running' }}"
+          - "API Status: {{ 'Available' if api_check.status in [200, 401] else 'Not Available' }}"
+          - "Total Agents: {{ (final_agent_list.stdout_lines | length - 1) if (final_agent_list.rc == 0) else 0 }}"
+          - "Agent Details:"
+          - "{% if final_agent_list.rc == 0 and (final_agent_list.stdout_lines
+            | length > 1) %}{{ final_agent_list.stdout_lines[1:] }}{% else %}No agents connected yet{% endif %}"
+          - ""
+          - "SECURITY: Services configured for internal network access only"
+          - "SSH FORWARDING: Use the following command to access web interfaces:"
+          - >-
+            {{
+              'ssh -L 5601:' ~ (
+                hostvars[groups['wazuh_dashboards'][0]]['ansible_default_ipv4']['address']
+                if ansible_connection == 'lxd'
+                else '127.0.0.1'
+              ) ~ ':5601 -L 55000:' ~ (
+                hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address']
+                if ansible_connection == 'lxd'
+                else '127.0.0.1'
+              ) ~ ':55000 '
+              (
+                hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address']
+                if ansible_connection == 'lxd'
+                else '127.0.0.1'
+              ) ~
+              ':55000 ' ~
+              ansible_user ~ '@' ~
+              (
+                (ansible_host | default(inventory_hostname))
+                if ansible_connection == 'lxd'
+                else inventory_hostname
+              )
+            }}
+          - ""
+          - "Then access:"
+          - "  Dashboard: https://localhost:5601"
+          - "  API: https://localhost:55000"
+          - "================================"

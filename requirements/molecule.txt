@@ -1,0 +1,23 @@
+# Molecule testing requirements with compatible versions
+# These specific versions work together without Docker plugin issues
+
+# NOTE: Use these exact versions to avoid molecule Docker plugin conditional bugs
+ansible-core==2.14.15
+ansible==7.7.0
+ansible-compat==4.1.11
+
+# Molecule with Docker support
+molecule==6.0.3
+molecule-plugins[docker]==23.5.3
+docker==7.1.0
+
+# Testing dependencies
+pytest==7.4.4
+yamllint==1.35.1
+ansible-lint==6.22.2
+
+# Required for compatibility
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+requests==2.31.0
+packaging==24.1

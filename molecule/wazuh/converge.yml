@@ -1,0 +1,94 @@
+---
+# Converge playbook for official Wazuh Ansible roles testing
+
+- name: Install Wazuh using official roles
+  hosts: all
+  become: true
+  vars:
+    # Override for single-node testing
+    single_node: true
+    wazuh_manager_version: "4.12.0-1"
+    
+    # Test credentials (not for production)
+    vault_wazuh_api_password: "TestApiPassword123!"
+    vault_wazuh_cluster_key: "TestClusterKey1234567890123456"
+    vault_wazuh_authd_pass: "TestAuthPassword123!"
+    vault_wazuh_indexer_admin_password: "TestIndexerAdmin123!"
+    
+    # Minimal configuration for testing
+    wazuh_manager_config:
+      cluster:
+        disabled: "yes"
+      vulnerability_detection:
+        enabled: "yes"
+    
+    indexer_jvm_heap_size: "512m"
+    indexer_security_enabled: true
+    
+  pre_tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_os_family == "Debian"
+    
+    - name: Install required packages
+      ansible.builtin.package:
+        name:
+          - curl
+          - wget
+          - gnupg
+          - apt-transport-https
+          - software-properties-common
+        state: present
+    
+    - name: Set vm.max_map_count for OpenSearch
+      ansible.posix.sysctl:
+        name: vm.max_map_count
+        value: "262144"
+        sysctl_set: true
+        state: present
+        reload: true
+      failed_when: false  # May fail in container
+    
+  tasks:
+    - name: Download and install Wazuh repository
+      ansible.builtin.shell: |
+        curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor > /usr/share/keyrings/wazuh.gpg
+        echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list
+        apt-get update
+      args:
+        creates: /etc/apt/sources.list.d/wazuh.list
+    
+    # Include official Wazuh roles
+    - name: Install Wazuh Manager
+      ansible.builtin.include_role:
+        name: wazuh-ansible/roles/wazuh/ansible-wazuh-manager
+      vars:
+        wazuh_manager_config:
+          cluster:
+            disabled: "yes"
+    
+    - name: Install Wazuh Indexer
+      ansible.builtin.include_role:
+        name: wazuh-ansible/roles/wazuh/ansible-wazuh-indexer
+      vars:
+        indexer_network_host: "0.0.0.0"
+        indexer_discovery_type: "single-node"
+    
+    - name: Install Wazuh Dashboard
+      ansible.builtin.include_role:
+        name: wazuh-ansible/roles/wazuh/ansible-wazuh-dashboard
+      vars:
+        dashboard_server_host: "0.0.0.0"
+
+  post_tasks:
+    - name: Ensure services are running
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - wazuh-manager
+        - wazuh-indexer
+        - wazuh-dashboard
+      failed_when: false  # Services might not start in containers

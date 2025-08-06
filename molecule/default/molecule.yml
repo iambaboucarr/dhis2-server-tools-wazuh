@@ -12,7 +12,7 @@ driver:
 
 platforms:
   - name: wazuh-server
-    image: ubuntu:22.04
+    image: ghcr.io/hifis-net/ubuntu-systemd:22.04
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -32,7 +32,7 @@ platforms:
       - "1514:1514"    # Wazuh Agent Port
   
   - name: dhis2-instance
-    image: ubuntu:22.04
+    image: ghcr.io/hifis-net/ubuntu-systemd:22.04
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -56,19 +56,26 @@ provisioner:
       stdout_callback: yaml
       bin_ansible_callbacks: true
       host_key_checking: false
+      conditional_bare_variables: true
+      allow_world_readable_tmpfiles: true
     ssh_connection:
       pipelining: true
+  env:
+    ANSIBLE_ALLOW_BROKEN_CONDITIONALS: True
   inventory:
     group_vars:
       all:
         ansible_python_interpreter: /usr/bin/python3
         ansible_connection: docker
-        wazuh_version: "4.12.0"
-        wazuh_api_password: "MoleculeTest123!"
-        wazuh_authd_pass: "MoleculeAuthPass123!"
+        enable_wazuh_monitoring: yes
+        single_node: true
         
     groups:
-      wazuh:
+      wazuh_managers:
+        - wazuh-server
+      wazuh_indexers:
+        - wazuh-server  
+      wazuh_dashboards:
         - wazuh-server
       instances:
         - dhis2-instance

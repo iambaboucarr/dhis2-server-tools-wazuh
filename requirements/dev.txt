@@ -1,0 +1,22 @@
+# Development requirements for DHIS2 Server Tools
+# Includes testing, linting, and development tools
+
+-r base.txt
+
+# Testing frameworks
+pytest>=7.0.0
+pytest-ansible>=4.0.0
+pytest-testinfra>=10.0.0
+pytest-xdist>=3.0.0
+pytest-html>=3.1.0
+
+# Code quality tools
+ansible-lint>=6.0.0
+yamllint>=1.26.0
+flake8>=7.0.0
+black>=24.0.0
+bandit>=1.7.0
+pre-commit>=3.6.0
+
+# Development tools
+tox>=4.0.0

@@ -1,0 +1,12 @@
+# DHIS2 Server Tools Python Requirements
+# 
+# For production deployment:
+-r requirements/base.txt
+#
+# For development (includes testing and linting tools):
+# -r requirements/dev.txt
+#
+# For molecule testing (specific compatible versions):
+# -r requirements/molecule.txt
+#
+# See requirements/README.md for detailed usage instructions
