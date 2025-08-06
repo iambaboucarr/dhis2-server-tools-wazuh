@@ -1,16 +1,81 @@
 ---
-- name: Prepare
+- name: Prepare test environment
   hosts: all
+  become: true
   gather_facts: true
   tasks:
-    - name: Install system dependencies
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install basic packages
       ansible.builtin.apt:
         name:
           - python3
           - python3-pip
           - curl
-          - ca-certificates
+          - wget
           - gnupg
-          - lsb-release
-        update_cache: true
-      when: ansible_os_family == "Debian"
+          - apt-transport-https
+          - software-properties-common
+          - systemd
+          - init
+        state: present
+
+    - name: Ensure systemd is running
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Create required directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /var/log/wazuh
+        - /etc/wazuh
+        - /var/ossec
+        - /opt/dhis2
+
+    - name: Set timezone
+      ansible.builtin.timezone:
+        name: UTC
+
+- name: Prepare Wazuh server
+  hosts: wazuh
+  become: true
+  tasks:
+    - name: Create Wazuh user
+      ansible.builtin.user:
+        name: wazuh
+        system: yes
+        shell: /bin/false
+        home: /var/ossec
+
+    - name: Install Java for Wazuh indexer
+      ansible.builtin.apt:
+        name: openjdk-11-jdk
+        state: present
+
+    - name: Set JAVA_HOME
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64'
+        create: yes
+
+- name: Prepare DHIS2 instance
+  hosts: instances
+  become: true
+  tasks:
+    - name: Install Java for DHIS2
+      ansible.builtin.apt:
+        name: openjdk-11-jdk
+        state: present
+
+    - name: Create dhis user
+      ansible.builtin.user:
+        name: dhis
+        system: yes
+        shell: /bin/bash
+        home: /home/dhis

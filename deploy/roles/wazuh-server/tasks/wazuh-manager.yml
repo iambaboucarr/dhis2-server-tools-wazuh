@@ -1,0 +1,50 @@
+---
+- name: Install Wazuh manager
+  ansible.builtin.apt:
+    name: wazuh-manager={{ wazuh_version }}-*
+    state: present
+  environment:
+    WAZUH_MANAGER_AUTOSTART: "false"
+
+- name: Configure Wazuh manager ossec.conf
+  ansible.builtin.template:
+    src: ossec.conf.j2
+    dest: /var/ossec/etc/ossec.conf
+    owner: root
+    group: wazuh
+    mode: '0640'
+    backup: yes
+  notify: restart wazuh-manager
+
+- name: Configure authd password
+  ansible.builtin.copy:
+    content: "{{ wazuh_authd_pass }}"
+    dest: /var/ossec/etc/authd.pass
+    owner: root
+    group: wazuh
+    mode: '0640'
+
+- name: Enable and start Wazuh manager
+  ansible.builtin.systemd:
+    name: wazuh-manager
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for Wazuh API to be ready
+  ansible.builtin.wait_for:
+    port: "{{ wazuh_api_port }}"
+    host: 127.0.0.1
+    delay: 10
+    timeout: 300
+
+- name: Configure Wazuh API for internal access
+  ansible.builtin.include_tasks: wazuh-api.yml
+
+- name: Configure Wazuh API users
+  ansible.builtin.shell: |
+    cd /var/ossec/api/configuration/auth
+    echo "{{ item.password }}" | /var/ossec/framework/python/bin/python3 /var/ossec/api/scripts/wazuh-api-user.py -u {{ item.username }}
+  loop: "{{ wazuh_api_users }}"
+  no_log: true
+  changed_when: true

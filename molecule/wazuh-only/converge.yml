@@ -1,0 +1,11 @@
+---
+# Wazuh-only converge playbook
+- name: Deploy Wazuh Server Only
+  hosts: wazuh
+  become: true
+  gather_facts: true
+  vars:
+    ansible_connection: docker
+    wazuh_manager_fqdn: wazuh-standalone
+  roles:
+    - role: ../../deploy/roles/wazuh-server

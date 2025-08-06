@@ -1,0 +1,51 @@
+---
+- name: Install Wazuh indexer
+  ansible.builtin.apt:
+    name: wazuh-indexer={{ wazuh_version }}-*
+    state: present
+  notify: restart wazuh-indexer
+
+- name: Configure Wazuh indexer network settings
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: yes
+  loop:
+    - { regexp: "^network.host:", line: "network.host: {{ wazuh_indexer_network_host }}" }
+    - { regexp: "^http.port:", line: "http.port: 9200" }
+    - { regexp: "^discovery.type:", line: "discovery.type: single-node" }
+  notify: restart wazuh-indexer
+
+- name: Configure Wazuh indexer security settings
+  ansible.builtin.blockinfile:
+    path: /etc/wazuh-indexer/opensearch.yml
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Security Settings"
+    block: |
+      # Security settings
+      plugins.security.ssl.http.enabled: true
+      plugins.security.ssl.transport.enabled: true
+      plugins.security.allow_unsafe_democertificates: true
+  notify: restart wazuh-indexer
+
+- name: Initialize Wazuh indexer security
+  ansible.builtin.shell: |
+    /usr/share/wazuh-indexer/bin/indexer-security-init.sh
+  args:
+    creates: /etc/wazuh-indexer/certs/admin.pem
+  environment:
+    JAVA_HOME: /usr/share/wazuh-indexer/jdk
+
+- name: Enable and start Wazuh indexer
+  ansible.builtin.systemd:
+    name: wazuh-indexer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for Wazuh indexer to be ready
+  ansible.builtin.wait_for:
+    port: 9200
+    host: 127.0.0.1
+    delay: 10
+    timeout: 300

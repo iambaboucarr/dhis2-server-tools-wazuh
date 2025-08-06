@@ -1,0 +1,123 @@
+<!-- LXD Container Security Rules -->
+<group name="lxd,container,">
+  
+  <!-- LXD Container Operations -->
+  <rule id="100300" level="3">
+    <decoded_as>lxd</decoded_as>
+    <match>container started</match>
+    <description>LXD container started</description>
+  </rule>
+
+  <rule id="100301" level="3">
+    <decoded_as>lxd</decoded_as>
+    <match>container stopped</match>
+    <description>LXD container stopped</description>
+  </rule>
+
+  <rule id="100302" level="5">
+    <decoded_as>lxd</decoded_as>
+    <match>container deleted|container removed</match>
+    <description>LXD container deleted</description>
+    <group>config_changed,</group>
+  </rule>
+
+  <rule id="100303" level="7">
+    <decoded_as>lxd</decoded_as>
+    <match>privileged container|security.privileged</match>
+    <description>Privileged LXD container detected - security risk</description>
+    <group>security,</group>
+  </rule>
+
+  <!-- Container Resource Monitoring -->
+  <rule id="100310" level="4">
+    <decoded_as>lxd</decoded_as>
+    <match>memory limit exceeded|out of memory</match>
+    <description>LXD container memory limit exceeded</description>
+  </rule>
+
+  <rule id="100311" level="5">
+    <decoded_as>lxd</decoded_as>
+    <match>CPU throttling|cpu limit</match>
+    <description>LXD container CPU throttling detected</description>
+  </rule>
+
+  <rule id="100312" level="6">
+    <decoded_as>lxd</decoded_as>
+    <match>disk space|storage pool full</match>
+    <description>LXD storage pool space issue</description>
+    <group>system_error,</group>
+  </rule>
+
+  <!-- Container Security Violations -->
+  <rule id="100320" level="8">
+    <decoded_as>lxd</decoded_as>
+    <match>escape attempt|container breakout</match>
+    <description>Possible container escape attempt detected</description>
+    <group>attack,</group>
+  </rule>
+
+  <rule id="100321" level="7">
+    <decoded_as>lxd</decoded_as>
+    <match>unauthorized access|permission denied</match>
+    <description>Unauthorized LXD access attempt</description>
+    <group>access_denied,</group>
+  </rule>
+
+  <rule id="100322" level="9">
+    <decoded_as>lxd</decoded_as>
+    <match>device attach|device add</match>
+    <regex>/dev/|host-root</regex>
+    <description>Dangerous device attached to LXD container</description>
+    <group>security,attack,</group>
+  </rule>
+
+  <!-- Network Security -->
+  <rule id="100330" level="5">
+    <decoded_as>lxd</decoded_as>
+    <match>network attach|network detach</match>
+    <description>LXD container network configuration changed</description>
+    <group>config_changed,</group>
+  </rule>
+
+  <rule id="100331" level="7">
+    <decoded_as>lxd</decoded_as>
+    <match>port scan|syn flood</match>
+    <description>Network attack detected from LXD container</description>
+    <group>attack,ids,</group>
+  </rule>
+
+  <!-- Container Compromise Indicators -->
+  <rule id="100340" level="8" frequency="5" timeframe="60">
+    <if_sid>100301</if_sid>
+    <same_field>container_name</same_field>
+    <description>LXD container restarting frequently - possible compromise</description>
+    <group>service_availability,</group>
+  </rule>
+
+  <rule id="100341" level="9">
+    <decoded_as>lxd</decoded_as>
+    <match>cryptominer|xmrig|minerd</match>
+    <description>Cryptocurrency miner detected in LXD container</description>
+    <group>malware,</group>
+  </rule>
+
+</group>
+
+<!-- LXD Host Security -->
+<group name="lxd,host,">
+  
+  <rule id="100350" level="6">
+    <decoded_as>lxd</decoded_as>
+    <match>LXD daemon error|lxd crashed</match>
+    <description>LXD daemon error detected</description>
+    <group>system_error,</group>
+  </rule>
+
+  <rule id="100351" level="8">
+    <decoded_as>lxd</decoded_as>
+    <match>storage corruption|database corruption</match>
+    <description>LXD storage or database corruption detected</description>
+    <group>system_error,integrity,</group>
+  </rule>
+
+</group>

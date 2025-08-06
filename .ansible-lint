@@ -1,26 +1,59 @@
 ---
+# Ansible-lint configuration for DHIS2 + Wazuh project
+
+profile: production
+
 exclude_paths:
-  - .cache/
+  - .git/
   - .github/
   - molecule/
-  - .ansible-lint
-  - env/
-  - venv/
-  - changelogs/
-  - docs/
-  - "**/.travis.yml"
-  - "**/meta/main.yml"
-  - "**/tests/"
-parseable: true
+  - .molecule/
+  - .cache/
+  - test/
+  - __pycache__/
 
+# Enable specific rule sets
+enable_list:
+  - yaml
+  - fqcn-builtins
+  - no-handler
+  - no-jinja-when
+
+# Skip specific rules that are not applicable or too strict
 skip_list:
-  - "204" # Lines should be no longer than 160 chars
-  - "301" # Commands should not change things if nothing needs doing
-  - "303" # Using command rather than module
-  - "306" # Shells that use pipes should set the pipefail option
-  - "yaml[new-line-at-end-of-file]" # Missing new line at end of file
-  - "yaml[line-length]" # Line too long
+  - role-name  # We have descriptive role names
+  - galaxy[no-changelog]  # Not required for internal roles
+  - fqcn[action-core]  # Allow short module names for readability
+  - var-naming[no-role-prefix]  # Allow variables without role prefix
+  - name[casing]  # Allow flexible task naming
+  - risky-shell-pipe  # Some shell commands need pipes
 
-warn_list:
-  - experimental # all rules tagged as experimental
-  - yaml # Violations reported by yamllint
+# Configure specific rules
+rules:
+  line-length:
+    max: 120
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
+  braces:
+    max-spaces-inside: 1
+    min-spaces-inside: 0
+  brackets:
+    max-spaces-inside: 1
+    min-spaces-inside: 0
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: false
+
+# Mock modules and roles that might not be available during linting
+mock_modules:
+  - custom_lxd
+  - community.general.ufw
+
+mock_roles: []
+
+# Use specific Ansible version for linting
+supported_python:
+  - "3.9"
+  - "3.10" 
+  - "3.11"
+  - "3.12"

@@ -1,0 +1,158 @@
+---
+# Full-stack scenario - Complete DHIS2 + Wazuh integration test
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: wazuh-manager
+    image: quay.io/ansible/molecule-ubuntu:22.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-full-net
+        ipv4_address: 172.22.0.10
+    published_ports:
+      - "55002:55000"  # Wazuh API
+      - "1516:1514"    # Wazuh Agent Port
+
+  - name: postgres-server
+    image: quay.io/ansible/molecule-ubuntu:22.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-full-net
+        ipv4_address: 172.22.0.20
+
+  - name: dhis2-app
+    image: quay.io/ansible/molecule-ubuntu:22.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-full-net
+        ipv4_address: 172.22.0.11
+    published_ports:
+      - "8080:8080"    # DHIS2 Application
+
+  - name: nginx-proxy
+    image: quay.io/ansible/molecule-ubuntu:22.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-full-net
+        ipv4_address: 172.22.0.2
+    published_ports:
+      - "80:80"        # HTTP
+      - "443:443"      # HTTPS
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: junit, yaml, timer
+      stdout_callback: yaml
+      host_key_checking: false
+  inventory:
+    group_vars:
+      all:
+        ansible_python_interpreter: /usr/bin/python3
+        ansible_connection: docker
+        
+        # Test environment settings
+        fqdn: dhis2-full-test.molecule
+        email: fulltest@molecule.example
+        timezone: UTC
+        
+        # Network settings
+        lxd_network: 172.22.0.0/16
+        proxy: nginx
+        TLS_TYPE: selfsigned
+        postgresql_version: 14
+        
+        # Wazuh settings
+        wazuh_version: "4.12.0"
+        wazuh_api_password: "FullStackTest123!"
+        wazuh_authd_pass: "FullStackAuth123!"
+        wazuh_container_cidr: "172.22.0.0/16"
+        
+    host_vars:
+      postgres-server:
+        database_host: postgres-server
+      dhis2-app:
+        database_host: postgres-server
+        dhis2_version: "2.40"
+        JAVA_VERSION: 11
+      wazuh-manager:
+        wazuh_manager_fqdn: wazuh-manager
+        
+    groups:
+      wazuh:
+        - wazuh-manager
+      databases:
+        - postgres-server
+      instances:
+        - dhis2-app
+      web:
+        - nginx-proxy
+      monitoring:
+        - wazuh-manager
+
+verifier:
+  name: ansible
+
+scenario:
+  name: full-stack
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence  # Skip idempotence for complex scenarios
+    - verify
+    - cleanup
+    - destroy

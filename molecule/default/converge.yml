@@ -1,17 +1,26 @@
 ---
-- name: Converge
-  hosts: all
-  tasks:
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: true
-      when: ansible_os_family == "Debian"
+# Molecule converge playbook - runs the actual deployment
+- name: Deploy Wazuh Security Monitoring
+  hosts: wazuh
+  become: true
+  gather_facts: true
+  vars:
+    # Override for Docker environment
+    ansible_connection: docker
+    wazuh_manager_fqdn: wazuh-server
+    wazuh_container_network: "172.20.0.0"
+    wazuh_container_cidr: "172.20.0.0/16"
+  roles:
+    - role: ../../deploy/roles/wazuh-server
 
-    - name: Install Python
-      ansible.builtin.package:
-        name: python3
-        state: present
-
-    - name: Include dhis2 role
-      ansible.builtin.include_role:
-        name: dhis2
+- name: Install Wazuh agents on monitored containers
+  hosts: instances
+  become: true
+  gather_facts: true
+  vars:
+    # Override for Docker environment
+    ansible_connection: docker
+    wazuh_manager_ip: wazuh-server
+  roles:
+    - role: ../../deploy/roles/wazuh-agent
+      when: groups['wazuh'] | length > 0
