@@ -113,6 +113,7 @@
   become: true
   gather_facts: true
   vars:
+    ansible_remote_tmp: /var/tmp
     # Wazuh version configuration
     wazuh_manager_version: "4.12.0-1"
 
@@ -210,6 +211,7 @@
   hosts: wazuh_indexers
   become: true
   vars:
+    ansible_remote_tmp: /var/tmp
     indexer_cluster_name: "wazuh-cluster"
     indexer_node_name: "{{ ansible_hostname }}"
     indexer_network_host: "{{ ansible_default_ipv4.address }}" # Bind to internal IP only
@@ -259,6 +261,7 @@
   hosts: wazuh_dashboards
   become: true
   vars:
+    ansible_remote_tmp: /var/tmp
     # Bind to container IP if LXD, localhost otherwise (for SSH forwarding)
     dashboard_server_host: >-
       {{ ansible_default_ipv4.address if ansible_connection == 'lxd' else '127.0.0.1' }}
@@ -289,6 +292,7 @@
   become: true
   connection: local
   vars:
+    ansible_remote_tmp: /var/tmp
     wazuh_agent_version: "4.12.0-1"
     wazuh_managers:
       - address: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
@@ -407,6 +411,7 @@
   hosts: instances:web:databases:monitoring:integration
   become: true
   vars:
+    ansible_remote_tmp: /var/tmp
     wazuh_agent_version: "4.12.0-1"
     wazuh_managers:
       - address: >-
@@ -542,6 +547,8 @@
 - name: Validate Wazuh deployment
   hosts: wazuh_managers
   become: true
+  vars:
+    ansible_remote_tmp: /var/tmp
   tasks:
     - name: Skip validation if Wazuh monitoring is disabled
       ansible.builtin.debug:
