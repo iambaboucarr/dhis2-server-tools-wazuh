@@ -1,0 +1,36 @@
+---
+- name: Create Wazuh server container
+  custom_lxd:
+    name: "{{ inventory_hostname }}"
+    state: started
+    source:
+      type: image
+      alias: "{{ guest_os }}"
+      server: "{{ lxd_source_server | default('') }}"
+      protocol: "{{ lxd_source_protocol | default('') }}"
+      architecture: "{{ guest_os_arch | default('x86_64') }}"
+    config:
+      limits.cpu: "2"
+      limits.memory: "4GB"
+    devices:
+      root:
+        path: /
+        pool: default
+        type: disk
+        size: "20GB"
+    wait_for_ipv4_addresses: true
+  delegate_to: 127.0.0.1
+  register: container_info
+
+- name: Set container IP address
+  ansible.builtin.set_fact:
+    ansible_host: "{{ container_info.addresses.eth0[0] }}"
+  when: container_info.addresses is defined
+
+- name: Wait for container to be ready
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 22
+    delay: 10
+    timeout: 300
+  delegate_to: 127.0.0.1

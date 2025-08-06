@@ -1,0 +1,17 @@
+---
+- name: Include tasks for {{ ansible_connection }}
+  ansible.builtin.include_tasks: "{{ ansible_connection }}.yml"
+  when: inventory_hostname in groups['wazuh'] | default([])
+
+- name: Install Wazuh prerequisites
+  ansible.builtin.include_tasks: prerequisites.yml
+
+- name: Install Wazuh manager
+  ansible.builtin.include_tasks: wazuh-manager.yml
+
+- name: Configure firewall rules
+  ansible.builtin.include_tasks: firewall.yml
+
+- name: Configure Wazuh for LXD monitoring
+  ansible.builtin.include_tasks: lxd-monitoring.yml
+  when: ansible_connection == "lxd"

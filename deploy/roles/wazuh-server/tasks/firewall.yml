@@ -1,0 +1,42 @@
+---
+# Only allow Wazuh agent communication from internal network
+- name: Allow Wazuh agent ports from LXD network only
+  community.general.ufw:
+    rule: allow
+    src: "{{ wazuh_container_cidr }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    comment: "{{ item.comment }} from LXD internal"
+  loop:
+    - { port: "{{ wazuh_agent_port }}", proto: "tcp", comment: "Wazuh agent" }
+    - { port: "{{ wazuh_agent_port }}", proto: "udp", comment: "Wazuh agent UDP" }
+    - { port: "{{ wazuh_agent_enrollment_port }}", comment: "Wazuh enrollment" }
+  delegate_to: 127.0.0.1
+  when: ansible_connection == "lxd"
+
+# Block external access to Wazuh web interfaces
+- name: Ensure Wazuh web interfaces are not accessible from internet
+  community.general.ufw:
+    rule: deny
+    port: "{{ item.port }}"
+    proto: tcp
+    comment: "{{ item.comment }} - internal only"
+  loop:
+    - { port: "{{ wazuh_api_port }}", comment: "Wazuh API" }
+    - { port: "9200", comment: "Wazuh indexer" }
+    - { port: "5601", comment: "Wazuh dashboard" }
+  delegate_to: 127.0.0.1
+  when: ansible_connection == "lxd"
+
+# Allow cluster communication only between Wazuh nodes
+- name: Allow Wazuh cluster port from internal network
+  community.general.ufw:
+    rule: allow
+    src: "{{ wazuh_container_cidr }}"
+    port: "{{ wazuh_cluster_port }}"
+    proto: tcp
+    comment: "Wazuh cluster - internal only"
+  delegate_to: 127.0.0.1
+  when: 
+    - ansible_connection == "lxd"
+    - wazuh_manager_config.cluster.disabled == "no"

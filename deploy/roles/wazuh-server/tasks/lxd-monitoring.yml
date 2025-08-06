@@ -1,0 +1,48 @@
+---
+- name: Create Wazuh rules for DHIS2 monitoring
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: wazuh
+    mode: '0640'
+  loop:
+    - { src: "dhis2_rules.xml.j2", dest: "/var/ossec/etc/rules/dhis2_rules.xml" }
+    - { src: "lxd_rules.xml.j2", dest: "/var/ossec/etc/rules/lxd_rules.xml" }
+  notify: restart wazuh-manager
+
+- name: Configure Wazuh decoders for DHIS2
+  ansible.builtin.template:
+    src: dhis2_decoders.xml.j2
+    dest: /var/ossec/etc/decoders/dhis2_decoders.xml
+    owner: root
+    group: wazuh
+    mode: '0640'
+  notify: restart wazuh-manager
+
+- name: Create active response scripts for container security
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: '0750'
+  loop:
+    - { src: "lxd_block_container.sh.j2", dest: "/var/ossec/active-response/bin/lxd_block_container.sh" }
+    - { src: "lxd_isolate_container.sh.j2", dest: "/var/ossec/active-response/bin/lxd_isolate_container.sh" }
+
+- name: Configure vulnerability detection for Java/Tomcat
+  ansible.builtin.blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    marker: "<!-- {mark} ANSIBLE MANAGED BLOCK - Vulnerability Detection -->"
+    insertafter: "</ossec_config>"
+    content: |
+      <vulnerability-detection>
+        <enabled>yes</enabled>
+        <index-status>yes</index-status>
+        <feed-update-interval>60m</feed-update-interval>
+        <ignore>
+          <path>/opt/dhis2</path>
+        </ignore>
+      </vulnerability-detection>
+  notify: restart wazuh-manager

@@ -1,0 +1,111 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrant configuration for testing DHIS2 with Wazuh integration
+Vagrant.configure("2") do |config|
+  
+  # Base box - Ubuntu 22.04 LTS
+  config.vm.box = "ubuntu/jammy64"
+  
+  # Disable default shared folder
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  
+  # Copy the deploy directory to the VM
+  config.vm.synced_folder "../deploy", "/home/vagrant/dhis2-deploy", 
+    type: "rsync",
+    rsync__exclude: [".git/", "*.pyc", "__pycache__/"]
+  
+  # Main server with LXD for containers
+  config.vm.define "dhis2-server" do |server|
+    server.vm.hostname = "dhis2-server"
+    
+    # Network configuration
+    server.vm.network "private_network", ip: "192.168.56.10"
+    server.vm.network "forwarded_port", guest: 22, host: 2222, id: "ssh"
+    
+    # Port forwarding for testing (will be blocked by firewall in production)
+    server.vm.network "forwarded_port", guest: 80, host: 8080
+    server.vm.network "forwarded_port", guest: 443, host: 8443
+    
+    # VM resources - conservative settings for better compatibility
+    server.vm.provider "virtualbox" do |vb|
+      vb.name = "dhis2-wazuh-test"
+      vb.memory = "6144"  # Reduced to 6GB
+      vb.cpus = 2         # Reduced to 2 CPUs
+      
+      # Enable nested virtualization for LXD
+      vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
+      vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+      
+      # Additional stability settings
+      vb.customize ["modifyvm", :id, "--vram", "16"]
+      vb.customize ["modifyvm", :id, "--accelerate3d", "off"]
+      vb.customize ["modifyvm", :id, "--audio", "none"]
+      vb.customize ["modifyvm", :id, "--rtcuseutc", "on"]
+    end
+    
+    # Provision script
+    server.vm.provision "shell", inline: <<-SHELL
+      # Update system
+      apt-get update
+      apt-get upgrade -y
+      
+      # Install required packages
+      apt-get install -y \
+        python3 \
+        python3-pip \
+        git \
+        curl \
+        wget \
+        ufw \
+        software-properties-common
+      
+      # Install Ansible
+      apt-add-repository --yes --update ppa:ansible/ansible
+      apt-get install -y ansible
+      
+      # Configure UFW
+      ufw --force enable
+      ufw allow ssh
+      ufw allow from 192.168.56.0/24
+      
+      # Create deploy directory
+      mkdir -p /opt/dhis2-deploy
+      cp -r /home/vagrant/dhis2-deploy/* /opt/dhis2-deploy/
+      chown -R vagrant:vagrant /opt/dhis2-deploy
+      
+      # Install Python dependencies for Ansible
+      pip3 install jinja2 pyyaml
+      
+      echo "Base provisioning complete!"
+      echo "To deploy DHIS2 with Wazuh:"
+      echo "  vagrant ssh"
+      echo "  cd /opt/dhis2-deploy"
+      echo "  sudo ./deploy.sh"
+    SHELL
+  end
+  
+  # Optional: Separate test client for verifying SSH tunneling
+  config.vm.define "test-client", autostart: false do |client|
+    client.vm.hostname = "test-client"
+    client.vm.network "private_network", ip: "192.168.56.11"
+    
+    client.vm.provider "virtualbox" do |vb|
+      vb.name = "dhis2-test-client"
+      vb.memory = "1024"
+      vb.cpus = 1
+    end
+    
+    client.vm.provision "shell", inline: <<-SHELL
+      apt-get update
+      apt-get install -y curl wget openssh-client
+      
+      # Generate SSH key for testing
+      su - vagrant -c "ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa"
+      
+      echo "Test client ready!"
+      echo "Copy the SSH key to the server:"
+      echo "  ssh-copy-id vagrant@192.168.56.10"
+    SHELL
+  end
+end

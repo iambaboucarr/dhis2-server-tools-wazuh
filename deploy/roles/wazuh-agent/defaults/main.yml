@@ -1,0 +1,26 @@
+---
+# Wazuh agent configuration defaults
+wazuh_agent_version: "4.12.0"
+wazuh_manager_ip: "{{ hostvars[groups['wazuh'][0]]['ansible_host'] }}"
+wazuh_manager_port: "{{ wazuh_agent_port | default(1514) }}"
+wazuh_enrollment_port: "{{ wazuh_agent_enrollment_port | default(1515) }}"
+wazuh_agent_name: "{{ inventory_hostname }}-{{ ansible_hostname }}"
+wazuh_agent_groups: 
+  - "lxd"
+  - "dhis2"
+  - "{{ group_names[0] | default('default') }}"
+
+# Agent specific monitoring based on role
+wazuh_agent_monitoring:
+  instances:
+    - "/opt/dhis2/*/logs/dhis.log"
+    - "/opt/dhis2/*/logs/dhis-audit.log"
+    - "/var/log/tomcat*/catalina.out"
+  databases:
+    - "/var/log/postgresql/*.log"
+  web:
+    - "/var/log/nginx/*.log"
+    - "/var/log/apache2/*.log"
+  monitoring:
+    - "/var/log/munin/*.log"
+    - "/var/log/grafana/*.log"

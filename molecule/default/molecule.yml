@@ -1,41 +1,83 @@
 ---
+# Default Molecule scenario - Basic Wazuh integration test
 dependency:
   name: galaxy
   options:
+    requirements-file: ../../requirements.yml
     ignore-certs: true
     ignore-errors: true
+
 driver:
   name: docker
+
 platforms:
-  - name: instance
-    image: geerlingguy/docker-ubuntu2204-ansible:latest
-    pre_build_image: true
-    command: ""
+  - name: wazuh-server
+    image: ubuntu:22.04
+    privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    privileged: true
     cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-molecule-net
     published_ports:
-      - "0.0.0.0:8080:8080/tcp"
+      - "55000:55000"  # Wazuh API
+      - "1514:1514"    # Wazuh Agent Port
+  
+  - name: dhis2-instance
+    image: ubuntu:22.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-molecule-net
+
 provisioner:
   name: ansible
   config_options:
     defaults:
-      interpreter_python: auto_silent
-      callback_enabled: ["profile_tasks", "timer", "yaml"]
+      callbacks_enabled: junit, yaml, timer
       stdout_callback: yaml
+      bin_ansible_callbacks: true
+      host_key_checking: false
     ssh_connection:
       pipelining: true
   inventory:
-    host_vars:
-      instance:
-        ansible_user: ansible
+    group_vars:
+      all:
+        ansible_python_interpreter: /usr/bin/python3
+        ansible_connection: docker
+        wazuh_version: "4.12.0"
+        wazuh_api_password: "MoleculeTest123!"
+        wazuh_authd_pass: "MoleculeAuthPass123!"
+        
+    groups:
+      wazuh:
+        - wazuh-server
+      instances:
+        - dhis2-instance
+
 verifier:
-  name: testinfra
-  options:
-    v: true
-    junitxml: junit.xml
+  name: ansible
+
 scenario:
+  name: default
   test_sequence:
     - dependency
     - cleanup

@@ -1,0 +1,166 @@
+<ossec_config>
+  <global>
+    <jsonout_output>yes</jsonout_output>
+    <alerts_log>yes</alerts_log>
+    <logall>no</logall>
+    <logall_json>no</logall_json>
+    <email_notification>no</email_notification>
+    <smtp_server>smtp.example.wazuh.com</smtp_server>
+    <email_from>wazuh@{{ wazuh_manager_fqdn }}</email_from>
+    <email_to>{{ email | default('admin@example.com') }}</email_to>
+    <email_maxperhour>12</email_maxperhour>
+    <email_log_source>alerts.log</email_log_source>
+  </global>
+
+  <alerts>
+    <log_alert_level>3</log_alert_level>
+    <email_alert_level>12</email_alert_level>
+  </alerts>
+
+  <!-- Remote connection configuration -->
+  <remote>
+    <connection>secure</connection>
+    <port>{{ wazuh_agent_port }}</port>
+    <protocol>tcp,udp</protocol>
+    <allowed-ips>{{ wazuh_container_cidr }}</allowed-ips>
+    <local_ip>{{ ansible_default_ipv4.address }}</local_ip>
+  </remote>
+
+  <!-- Auth configuration -->
+  <auth>
+    <disabled>no</disabled>
+    <port>{{ wazuh_agent_enrollment_port }}</port>
+    <use_source_ip>yes</use_source_ip>
+    <force_insert>yes</force_insert>
+    <force_time>0</force_time>
+    <ssl_agent_ca>/var/ossec/etc/sslmanager.cert</ssl_agent_ca>
+    <ssl_verify_host>no</ssl_verify_host>
+    <ssl_manager_cert>/var/ossec/etc/sslmanager.cert</ssl_manager_cert>
+    <ssl_manager_key>/var/ossec/etc/sslmanager.key</ssl_manager_key>
+    <ssl_auto_negotiate>no</ssl_auto_negotiate>
+  </auth>
+
+  <!-- Cluster configuration -->
+  <cluster>
+    <name>{{ wazuh_manager_config.cluster.name }}</name>
+    <node_name>{{ wazuh_manager_config.cluster.node_name }}</node_name>
+    <node_type>{{ wazuh_manager_config.cluster.node_type }}</node_type>
+    <key>{{ wazuh_manager_config.cluster.key }}</key>
+    <port>{{ wazuh_cluster_port }}</port>
+    <bind_addr>{{ wazuh_manager_config.cluster.bind_addr }}</bind_addr>
+    <nodes>
+{% for node in wazuh_manager_config.cluster.nodes %}
+      <node>{{ node }}</node>
+{% endfor %}
+    </nodes>
+    <hidden>{{ wazuh_manager_config.cluster.hidden }}</hidden>
+    <disabled>{{ wazuh_manager_config.cluster.disabled }}</disabled>
+  </cluster>
+
+  <!-- Log analysis for DHIS2 -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/nginx/access.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/nginx/error.log</location>
+  </localfile>
+
+  <!-- DHIS2 specific logs -->
+  <localfile>
+    <log_format>multi-line</log_format>
+    <location>/opt/dhis2/*/logs/dhis.log</location>
+    <log_format>multi-line:4</log_format>
+  </localfile>
+
+  <!-- PostgreSQL logs -->
+  <localfile>
+    <log_format>postgresql_log</log_format>
+    <location>/var/log/postgresql/*.log</location>
+  </localfile>
+
+  <!-- LXD logs -->
+  <localfile>
+    <log_format>json</log_format>
+    <location>/var/log/lxd/lxd.log</location>
+  </localfile>
+
+  <!-- Rootcheck -->
+  <rootcheck>
+    <disabled>no</disabled>
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+    <frequency>43200</frequency>
+    <skip_nfs>yes</skip_nfs>
+  </rootcheck>
+
+  <!-- System inventory -->
+  <wodle name="syscollector">
+    <disabled>no</disabled>
+    <interval>1h</interval>
+    <scan_on_start>yes</scan_on_start>
+    <hardware>yes</hardware>
+    <os>yes</os>
+    <network>yes</network>
+    <packages>yes</packages>
+    <ports all="no">yes</ports>
+    <processes>yes</processes>
+  </wodle>
+
+  <!-- Security Configuration Assessment -->
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
+    <skip_nfs>yes</skip_nfs>
+  </sca>
+
+  <!-- File integrity monitoring for DHIS2 -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>43200</frequency>
+    <scan_on_start>yes</scan_on_start>
+    
+    <!-- DHIS2 directories -->
+    <directories check_all="yes" realtime="yes">/opt/dhis2</directories>
+    <directories check_all="yes">/etc/nginx</directories>
+    <directories check_all="yes">/etc/postgresql</directories>
+    
+    <!-- System directories -->
+    <directories check_all="yes">/etc,/usr/bin,/usr/sbin</directories>
+    <directories check_all="yes">/bin,/sbin,/boot</directories>
+    
+    <!-- Ignore some files -->
+    <ignore>/opt/dhis2/*/logs</ignore>
+    <ignore>/opt/dhis2/*/temp</ignore>
+    <ignore>/opt/dhis2/*/work</ignore>
+  </syscheck>
+
+  <!-- Active response configuration -->
+  <active-response>
+    <disabled>no</disabled>
+    <ca_store>/var/ossec/etc/wpk_root.pem</ca_store>
+    <ca_verification>yes</ca_verification>
+  </active-response>
+
+  <!-- Log rotation -->
+  <monitord>
+    <rotate_log>yes</rotate_log>
+    <compress>yes</compress>
+    <size>100M</size>
+    <age>365</age>
+  </monitord>
+
+</ossec_config>

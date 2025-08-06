@@ -1,0 +1,70 @@
+---
+# Molecule configuration for DHIS2 + Wazuh integration testing
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+    ignore-certs: true
+    ignore-errors: true
+
+driver:
+  name: docker
+
+platforms:
+  - name: dhis2-wazuh-test
+    image: quay.io/ansible/molecule-ubuntu:22.04
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /sbin/init
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+    environment:
+      DEBIAN_FRONTEND: noninteractive
+    networks:
+      - name: dhis2-test-network
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: junit, yaml, timer
+      stdout_callback: yaml
+      bin_ansible_callbacks: true
+    ssh_connection:
+      pipelining: true
+  inventory:
+    host_vars:
+      dhis2-wazuh-test:
+        ansible_connection: docker
+        ansible_python_interpreter: /usr/bin/python3
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+    prepare: prepare.yml
+    cleanup: cleanup.yml
+
+verifier:
+  name: ansible
+  options:
+    v: 1
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy

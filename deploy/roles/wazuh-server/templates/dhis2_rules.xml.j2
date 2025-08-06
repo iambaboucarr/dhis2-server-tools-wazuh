@@ -1,0 +1,154 @@
+<!-- DHIS2 Security Rules -->
+<group name="dhis2,">
+  
+  <!-- DHIS2 Authentication Rules -->
+  <rule id="100001" level="3">
+    <decoded_as>dhis2</decoded_as>
+    <match>Login attempt</match>
+    <description>DHIS2 login attempt</description>
+  </rule>
+
+  <rule id="100002" level="5">
+    <if_sid>100001</if_sid>
+    <match>failed</match>
+    <description>DHIS2 failed login attempt</description>
+  </rule>
+
+  <rule id="100003" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>100002</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple DHIS2 failed login attempts</description>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <rule id="100004" level="3">
+    <if_sid>100001</if_sid>
+    <match>successful</match>
+    <description>DHIS2 successful login</description>
+  </rule>
+
+  <!-- DHIS2 Data Access Rules -->
+  <rule id="100010" level="3">
+    <decoded_as>dhis2</decoded_as>
+    <match>Data export</match>
+    <description>DHIS2 data export activity</description>
+  </rule>
+
+  <rule id="100011" level="7">
+    <if_sid>100010</if_sid>
+    <match>bulk|complete|all</match>
+    <description>DHIS2 bulk data export - possible data exfiltration</description>
+    <group>data_exfiltration,</group>
+  </rule>
+
+  <!-- DHIS2 Configuration Changes -->
+  <rule id="100020" level="5">
+    <decoded_as>dhis2</decoded_as>
+    <match>configuration changed|settings updated</match>
+    <description>DHIS2 configuration change detected</description>
+    <group>config_changed,</group>
+  </rule>
+
+  <rule id="100021" level="8">
+    <if_sid>100020</if_sid>
+    <match>user role|permission|access</match>
+    <description>DHIS2 security configuration changed</description>
+    <group>config_changed,security,</group>
+  </rule>
+
+  <!-- DHIS2 SQL Injection Detection -->
+  <rule id="100030" level="9">
+    <decoded_as>dhis2</decoded_as>
+    <regex>(?i)(union.*select|select.*from|insert.*into|delete.*from|drop.*table)</regex>
+    <description>Possible SQL injection attempt in DHIS2</description>
+    <group>sql_injection,attack,</group>
+  </rule>
+
+  <!-- DHIS2 API Abuse -->
+  <rule id="100040" level="4">
+    <decoded_as>dhis2</decoded_as>
+    <match>API call</match>
+    <description>DHIS2 API access</description>
+  </rule>
+
+  <rule id="100041" level="8" frequency="100" timeframe="60">
+    <if_matched_sid>100040</if_matched_sid>
+    <same_source_ip />
+    <description>Excessive DHIS2 API calls - possible abuse</description>
+    <group>api_abuse,</group>
+  </rule>
+
+  <!-- DHIS2 Error Detection -->
+  <rule id="100050" level="4">
+    <decoded_as>dhis2</decoded_as>
+    <match>ERROR|Exception</match>
+    <description>DHIS2 application error</description>
+  </rule>
+
+  <rule id="100051" level="7">
+    <if_sid>100050</if_sid>
+    <match>OutOfMemory|StackOverflow</match>
+    <description>DHIS2 critical error - memory issue</description>
+    <group>system_error,</group>
+  </rule>
+
+  <rule id="100052" level="8">
+    <if_sid>100050</if_sid>
+    <match>database connection|connection pool</match>
+    <description>DHIS2 database connectivity issue</description>
+    <group>database_error,availability,</group>
+  </rule>
+
+</group>
+
+<!-- PostgreSQL Rules for DHIS2 -->
+<group name="postgresql,dhis2,">
+  
+  <rule id="100100" level="7">
+    <if_group>postgresql</if_group>
+    <match>FATAL|PANIC</match>
+    <description>PostgreSQL critical error affecting DHIS2</description>
+    <group>database_error,</group>
+  </rule>
+
+  <rule id="100101" level="5">
+    <if_group>postgresql</if_group>
+    <match>connection limit</match>
+    <description>PostgreSQL connection limit reached</description>
+  </rule>
+
+  <rule id="100102" level="8">
+    <if_group>postgresql</if_group>
+    <match>DROP DATABASE|DROP TABLE</match>
+    <description>Dangerous PostgreSQL operation detected</description>
+    <group>database_ddl,</group>
+  </rule>
+
+</group>
+
+<!-- Nginx/Apache Rules for DHIS2 -->
+<group name="web,dhis2,">
+  
+  <rule id="100200" level="6">
+    <if_group>web</if_group>
+    <match>POST /api/</match>
+    <regex>Content-Length: [0-9]{7,}</regex>
+    <description>Large POST request to DHIS2 API</description>
+  </rule>
+
+  <rule id="100201" level="8" frequency="20" timeframe="60">
+    <if_group>web</if_group>
+    <status>^4\d\d</status>
+    <same_source_ip />
+    <description>Multiple HTTP 4xx errors from same source</description>
+    <group>recon,</group>
+  </rule>
+
+  <rule id="100202" level="9">
+    <if_group>web</if_group>
+    <regex>(?i)(script>|onerror=|onclick=|<iframe)</regex>
+    <description>Possible XSS attempt against DHIS2</description>
+    <group>xss,attack,</group>
+  </rule>
+
+</group>

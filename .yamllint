@@ -1,37 +1,29 @@
 ---
 extends: default
 
-ignore:
-  - .github/
-  - env/
-  - venv/
-
 rules:
-  braces:
+  line-length:
+    max: 120
     level: warning
-    max-spaces-inside: 1
-  brackets:
-    level: warning
-    max-spaces-inside: 1
-  colons:
-    level: warning
-  commas:
-    level: warning
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
   comments:
     min-spaces-from-content: 1
-  comments-indentation: disable
-  document-start: disable
-  empty-lines:
-    level: warning
-  hyphens:
-    level: warning
   indentation:
-    level: warning
-    indent-sequences: consistent
-  line-length:
-    level: warning
-    allow-non-breakable-inline-mappings: true
-  truthy: disable
-  octal-values:
-    forbid-implicit-octal: true
-    forbid-explicit-octal: true
+    spaces: 2
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+
+ignore: |
+  .git/
+  .tox/
+  .molecule/
+  *.pyc
+  __pycache__/
+  .cache/
+  molecule/*/molecule.log
+  test-results/

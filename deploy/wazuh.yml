@@ -1,0 +1,21 @@
+---
+- name: Deploy Wazuh Security Monitoring
+  hosts: wazuh
+  become: true
+  gather_facts: true
+  tags: [wazuh, wazuh-server, security]
+  vars_files:
+    - vars/vars.yml
+  roles:
+    - role: wazuh-server
+
+- name: Install Wazuh agents on all containers
+  hosts: all:!wazuh:!127.0.0.1
+  become: true
+  gather_facts: true
+  tags: [wazuh, wazuh-agent, security]
+  vars_files:
+    - vars/vars.yml
+  roles:
+    - role: wazuh-agent
+      when: groups['wazuh'] | length > 0
