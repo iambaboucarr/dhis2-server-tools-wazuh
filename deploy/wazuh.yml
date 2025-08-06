@@ -29,7 +29,17 @@
 - name: Create Wazuh LXD containers if needed
   hosts: wazuh_managers:wazuh_indexers:wazuh_dashboards
   gather_facts: false
+  vars_files:
+    - vars/vars.yml
   tasks:
+    - name: Debug Wazuh container creation conditions
+      ansible.builtin.debug:
+        msg: 
+          - "enable_wazuh_monitoring: {{ enable_wazuh_monitoring | default('no') }}"
+          - "ansible_connection: {{ ansible_connection }}"
+          - "inventory_hostname: {{ inventory_hostname }}"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Create Wazuh container
       become: true
       vars:
@@ -58,9 +68,9 @@
             ipv4.address: "{{ ansible_host | ansible.utils.ipaddr(lxd_network) }}"
       when: 
         - enable_wazuh_monitoring | default('no') | bool
-        - ansible_connection == 'lxd'
+        - hostvars[inventory_hostname]['ansible_connection'] | default('') == 'lxd'
       delegate_to: 127.0.0.1
-      run_once: true
+      register: wazuh_container_created
 
     - name: Wait for systemd to be ready in Wazuh container
       ansible.builtin.wait_for:
@@ -70,7 +80,8 @@
       become: true
       when: 
         - enable_wazuh_monitoring | default('no') | bool
-        - ansible_connection == 'lxd'
+        - wazuh_container_created is defined
+        - wazuh_container_created.changed
 
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
