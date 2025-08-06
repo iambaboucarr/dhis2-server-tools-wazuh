@@ -100,38 +100,12 @@
         name: "{{ timezone }}"
       when: enable_wazuh_monitoring | default('no') | bool
 
-    - name: Create and configure temp directories for Wazuh roles
-      ansible.builtin.file:
-        path: "{{ item }}"
-        mode: '1777'
-        state: directory
-        owner: root
-        group: root
-      become: true
-      loop:
-        - /tmp
-        - /var/tmp
-        - /var/tmp/ansible-tmp
-      when: enable_wazuh_monitoring | default('no') | bool
-
-    - name: Ensure container has proper Python and tools for Ansible
-      ansible.builtin.package:
-        name:
-          - python3
-          - python3-apt
-        state: present
-        update_cache: yes
-      become: true
-      when: enable_wazuh_monitoring | default('no') | bool
 
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
   become: true
-  gather_facts: true
-  environment:
-    TMPDIR: /var/tmp/ansible-tmp
+  gather_facts: false
   vars:
-    ansible_remote_tmp: /var/tmp/ansible-tmp
     # Wazuh version configuration
     wazuh_manager_version: "4.12.0-1"
 
@@ -186,6 +160,13 @@
       ssl_auto_negotiate: "yes"
 
   pre_tasks:
+    - name: Gather facts for Wazuh manager
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Install required packages
       ansible.builtin.package:
         name:
@@ -225,13 +206,11 @@
         - enable_wazuh_monitoring | default('no') | bool
         - single_node or inventory_hostname in groups['wazuh_managers']
 
-- name: Deploy Wazuh Indexer (OpenSearch)
+- name: Deploy Wazuh Indexer (OpenSearch)  
   hosts: wazuh_indexers
   become: true
-  environment:
-    TMPDIR: /var/tmp/ansible-tmp
+  gather_facts: false
   vars:
-    ansible_remote_tmp: /var/tmp/ansible-tmp
     indexer_cluster_name: "wazuh-cluster"
     indexer_node_name: "{{ ansible_hostname }}"
     indexer_network_host: "{{ ansible_default_ipv4.address }}" # Bind to internal IP only
@@ -248,6 +227,13 @@
     indexer_jvm_heap_size: "1g"
 
   pre_tasks:
+    - name: Gather facts for Wazuh indexer
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Configure firewall for Indexer (internal network only)
       community.general.ufw:
         rule: allow
@@ -280,8 +266,8 @@
 - name: Deploy Wazuh Dashboard
   hosts: wazuh_dashboards
   become: true
+  gather_facts: false
   vars:
-    ansible_remote_tmp: /var/tmp
     # Bind to container IP if LXD, localhost otherwise (for SSH forwarding)
     dashboard_server_host: >-
       {{ ansible_default_ipv4.address if ansible_connection == 'lxd' else '127.0.0.1' }}
@@ -294,6 +280,13 @@
         | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits,punctuation')) }}
 
   pre_tasks:
+    - name: Gather facts for Wazuh dashboard
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Configure firewall for Dashboard (SSH forwarding access)
       community.general.ufw:
         rule: allow
@@ -311,8 +304,8 @@
   hosts: 127.0.0.1
   become: true
   connection: local
+  gather_facts: false
   vars:
-    ansible_remote_tmp: /var/tmp
     wazuh_agent_version: "4.12.0-1"
     wazuh_managers:
       - address: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
@@ -430,8 +423,8 @@
 - name: Deploy Wazuh agents on all DHIS2 containers
   hosts: instances:web:databases:monitoring:integration
   become: true
+  gather_facts: false
   vars:
-    ansible_remote_tmp: /var/tmp
     wazuh_agent_version: "4.12.0-1"
     wazuh_managers:
       - address: >-
@@ -567,8 +560,7 @@
 - name: Validate Wazuh deployment
   hosts: wazuh_managers
   become: true
-  vars:
-    ansible_remote_tmp: /var/tmp
+  gather_facts: false
   tasks:
     - name: Skip validation if Wazuh monitoring is disabled
       ansible.builtin.debug:
