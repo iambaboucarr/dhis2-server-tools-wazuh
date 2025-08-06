@@ -100,11 +100,27 @@
         name: "{{ timezone }}"
       when: enable_wazuh_monitoring | default('no') | bool
 
-    - name: Fix temp directory permissions for Wazuh roles
+    - name: Create and configure temp directories for Wazuh roles
       ansible.builtin.file:
-        path: /tmp
+        path: "{{ item }}"
         mode: '1777'
         state: directory
+        owner: root
+        group: root
+      become: true
+      loop:
+        - /tmp
+        - /var/tmp
+        - /var/tmp/ansible-tmp
+      when: enable_wazuh_monitoring | default('no') | bool
+
+    - name: Ensure container has proper Python and tools for Ansible
+      ansible.builtin.package:
+        name:
+          - python3
+          - python3-apt
+        state: present
+        update_cache: yes
       become: true
       when: enable_wazuh_monitoring | default('no') | bool
 
@@ -112,8 +128,10 @@
   hosts: wazuh_managers
   become: true
   gather_facts: true
+  environment:
+    TMPDIR: /var/tmp/ansible-tmp
   vars:
-    ansible_remote_tmp: /var/tmp
+    ansible_remote_tmp: /var/tmp/ansible-tmp
     # Wazuh version configuration
     wazuh_manager_version: "4.12.0-1"
 
@@ -210,8 +228,10 @@
 - name: Deploy Wazuh Indexer (OpenSearch)
   hosts: wazuh_indexers
   become: true
+  environment:
+    TMPDIR: /var/tmp/ansible-tmp
   vars:
-    ansible_remote_tmp: /var/tmp
+    ansible_remote_tmp: /var/tmp/ansible-tmp
     indexer_cluster_name: "wazuh-cluster"
     indexer_node_name: "{{ ansible_hostname }}"
     indexer_network_host: "{{ ansible_default_ipv4.address }}" # Bind to internal IP only
