@@ -138,6 +138,19 @@
         level: "info"
         format: "json"
 
+      authd:
+        enable: true
+        port: 1515
+        use_password: true
+        password: >-
+          {{ vault_wazuh_authd_pass
+            | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
+        ssl_agent_ca: null
+        ssl_verify_host: "no"
+        ssl_manager_cert: "sslmanager.cert"
+        ssl_manager_key: "sslmanager.key"
+        ssl_auto_negotiate: "yes"
+
     # API configuration
     wazuh_api_users:
       - username: "admin"
@@ -148,19 +161,6 @@
     # Filebeat configuration for manager
     filebeat_output_elasticsearch_hosts:
       - "{{ hostvars[groups['wazuh_indexers'][0]]['ansible_default_ipv4']['address'] }}:9200"
-
-    # Security configuration
-    wazuh_manager_authd:
-      enable: true
-      port: 1515
-      use_password: true
-      password: >-
-        {{ vault_wazuh_authd_pass
-          | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
-      ssl_verify_host: "no"
-      ssl_manager_cert: "/var/ossec/etc/sslmanager.cert"
-      ssl_manager_key: "/var/ossec/etc/sslmanager.key"
-      ssl_auto_negotiate: "yes"
 
   pre_tasks:
     - name: Gather facts for Wazuh manager
