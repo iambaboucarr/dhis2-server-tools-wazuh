@@ -156,13 +156,25 @@
       - username: "admin"
         password: >-
           {{ vault_wazuh_api_password
-            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits')) }}
 
     # Filebeat configuration for manager
     filebeat_output_elasticsearch_hosts:
       - "{{ hostvars[groups['wazuh_indexers'][0]]['ansible_default_ipv4']['address'] }}:9200"
 
   pre_tasks:
+    - name: Clean up old password files to regenerate without special characters
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/wazuh_api_pass
+        - /tmp/wazuh_indexer_pass
+        - /tmp/wazuh_authd_pass
+      delegate_to: 127.0.0.1
+      run_once: true
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Gather facts for Wazuh manager
       ansible.builtin.setup:
         gather_subset:
@@ -224,7 +236,7 @@
     indexer_security_enabled: true
     indexer_security_admin_password: >-
       {{ vault_wazuh_indexer_admin_password
-        | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+        | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits')) }}
 
     # Memory settings (adjust based on available RAM)
     indexer_jvm_heap_size: "1g"
@@ -280,7 +292,7 @@
     dashboard_elasticsearch_username: "admin"
     dashboard_elasticsearch_password: >-
       {{ vault_wazuh_indexer_admin_password
-        | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+        | default(lookup('password', '/tmp/wazuh_indexer_pass length=20 chars=ascii_letters,digits')) }}
 
   pre_tasks:
     - name: Gather facts for Wazuh dashboard
@@ -319,7 +331,7 @@
         api_user: "admin"
         api_password: >-
           {{ vault_wazuh_api_password
-            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits')) }}
 
     wazuh_agent_authd:
       registration_address: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
@@ -441,7 +453,7 @@
         api_user: "admin"
         api_password: >-
           {{ vault_wazuh_api_password
-            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits,punctuation')) }}
+            | default(lookup('password', '/tmp/wazuh_api_pass length=20 chars=ascii_letters,digits')) }}
 
     wazuh_agent_authd:
       registration_address: >-
