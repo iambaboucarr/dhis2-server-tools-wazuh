@@ -95,10 +95,24 @@ if [ $(cat inventory/hosts  | grep -Po '(?<=ansible_connection=)([a-z].*)') == "
      echo "Deploying dhis2 with lxd ..."
      # Ensure you community general callections are upgraded, 
      ansible-galaxy collection install community.general --upgrade
+     
+     # Install Wazuh roles if Wazuh monitoring is enabled
+     if grep -q "enable_wazuh_monitoring=yes" inventory/hosts; then
+       echo "Wazuh monitoring enabled, installing Wazuh Ansible roles..."
+       sudo ansible-galaxy install -r requirements/ansible.yml --force
+     fi
+     
      sudo ansible-playbook dhis2.yml
   else
      # deploying dhis2 over ssh
      echo "Deploy dhis2 over ssh ..."
+     
+     # Install Wazuh roles if Wazuh monitoring is enabled
+     if grep -q "enable_wazuh_monitoring=yes" inventory/hosts; then
+       echo "Wazuh monitoring enabled, installing Wazuh Ansible roles..."
+       ansible-galaxy install -r requirements/ansible.yml --force
+     fi
+     
      read -p "Enter ssh user: " ssh_user
      # Check if group exists and add user silently
       if ! getent group 'lxd' >/dev/null 2>&1; then
