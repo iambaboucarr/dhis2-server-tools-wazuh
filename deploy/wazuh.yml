@@ -122,6 +122,8 @@
   hosts: wazuh_managers
   become: true
   gather_facts: false
+  vars_files:
+    - vars/vars.yml
   vars:
     # Wazuh version configuration
     wazuh_manager_version: "4.12.0-1"
@@ -177,27 +179,23 @@
       ssl_auto_negotiate: "yes"
 
   pre_tasks:
-    - name: Test basic connectivity with raw command
-      ansible.builtin.raw: |
-        ls -la /tmp/
-        mkdir -p /tmp/ansible-temp || true
-        chmod 777 /tmp/ansible-temp || true
-        echo "Temp directory test successful"
-      register: temp_test
-      when: enable_wazuh_monitoring | default('no') | bool
-
-    - name: Debug temp directory test
+    - name: Debug connection variables for Wazuh manager
       ansible.builtin.debug:
-        var: temp_test
+        msg:
+          - "inventory_hostname: {{ inventory_hostname }}"
+          - "ansible_host: {{ ansible_host }}"
+          - "ansible_connection: {{ ansible_connection }}"
+          - "hostvars connection: {{ hostvars[inventory_hostname]['ansible_connection'] | default('undefined') }}"
       when: enable_wazuh_monitoring | default('no') | bool
 
-    - name: Gather facts for Wazuh manager with custom temp dir
-      ansible.builtin.setup:
-        gather_subset:
-          - network
-          - "!min"
-      vars:
-        ansible_remote_tmp: /tmp/ansible-temp
+    - name: Test simple command to verify container connection
+      ansible.builtin.command: echo "Container connection test successful"
+      register: connection_test
+      when: enable_wazuh_monitoring | default('no') | bool
+
+    - name: Debug connection test result
+      ansible.builtin.debug:
+        var: connection_test
       when: enable_wazuh_monitoring | default('no') | bool
 
     - name: Install required packages
