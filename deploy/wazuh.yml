@@ -160,11 +160,27 @@
       ssl_auto_negotiate: "yes"
 
   pre_tasks:
-    - name: Gather facts for Wazuh manager
+    - name: Test basic connectivity with raw command
+      ansible.builtin.raw: |
+        ls -la /tmp/
+        mkdir -p /tmp/ansible-temp || true
+        chmod 777 /tmp/ansible-temp || true
+        echo "Temp directory test successful"
+      register: temp_test
+      when: enable_wazuh_monitoring | default('no') | bool
+
+    - name: Debug temp directory test
+      ansible.builtin.debug:
+        var: temp_test
+      when: enable_wazuh_monitoring | default('no') | bool
+
+    - name: Gather facts for Wazuh manager with custom temp dir
       ansible.builtin.setup:
         gather_subset:
           - network
           - "!min"
+      vars:
+        ansible_remote_tmp: /tmp/ansible-temp
       when: enable_wazuh_monitoring | default('no') | bool
 
     - name: Install required packages
