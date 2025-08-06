@@ -32,16 +32,6 @@
   vars_files:
     - vars/vars.yml
   tasks:
-    - name: Debug Wazuh container creation variables
-      ansible.builtin.debug:
-        msg:
-          - "inventory_hostname: {{ inventory_hostname }}"
-          - "ansible_host: {{ ansible_host }}"
-          - "group_names: {{ group_names }}"
-          - "ansible_connection: {{ hostvars[inventory_hostname]['ansible_connection'] | default('undefined') }}"
-          - "lxd_network: {{ lxd_network | default('undefined') }}"
-      when: enable_wazuh_monitoring | default('no') | bool
-
     - name: Create Wazuh container (following DHIS2 pattern)
       become: true
       vars:
@@ -74,12 +64,6 @@
       delegate_to: 127.0.0.1
       register: create_wazuh_container_status
 
-    - name: Debug container creation result
-      ansible.builtin.debug:
-        var: create_wazuh_container_status
-      when: 
-        - enable_wazuh_monitoring | default('no') | bool
-        - create_wazuh_container_status is defined
 
     - name: Gather facts for Wazuh container
       ansible.builtin.setup:
@@ -125,8 +109,8 @@
   vars_files:
     - vars/vars.yml
   vars:
-    # Wazuh version configuration
-    wazuh_manager_version: "4.12.0-1"
+    # Wazuh version configuration (use latest available)
+    wazuh_manager_version: "4.12.0"
 
     # Single node deployment (set to false for cluster)
     single_node: true
@@ -179,23 +163,11 @@
       ssl_auto_negotiate: "yes"
 
   pre_tasks:
-    - name: Debug connection variables for Wazuh manager
-      ansible.builtin.debug:
-        msg:
-          - "inventory_hostname: {{ inventory_hostname }}"
-          - "ansible_host: {{ ansible_host }}"
-          - "ansible_connection: {{ ansible_connection }}"
-          - "hostvars connection: {{ hostvars[inventory_hostname]['ansible_connection'] | default('undefined') }}"
-      when: enable_wazuh_monitoring | default('no') | bool
-
-    - name: Test simple command to verify container connection
-      ansible.builtin.command: echo "Container connection test successful"
-      register: connection_test
-      when: enable_wazuh_monitoring | default('no') | bool
-
-    - name: Debug connection test result
-      ansible.builtin.debug:
-        var: connection_test
+    - name: Gather facts for Wazuh manager
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
       when: enable_wazuh_monitoring | default('no') | bool
 
     - name: Install required packages
@@ -337,7 +309,7 @@
   connection: local
   gather_facts: false
   vars:
-    wazuh_agent_version: "4.12.0-1"
+    wazuh_agent_version: "4.12.0"
     wazuh_managers:
       - address: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
         port: 1514
@@ -456,7 +428,7 @@
   become: true
   gather_facts: false
   vars:
-    wazuh_agent_version: "4.12.0-1"
+    wazuh_agent_version: "4.12.0"
     wazuh_managers:
       - address: >-
           {{ wazuh_manager_ip | default(
