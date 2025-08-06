@@ -100,6 +100,14 @@
         name: "{{ timezone }}"
       when: enable_wazuh_monitoring | default('no') | bool
 
+    - name: Fix temp directory permissions for Wazuh roles
+      ansible.builtin.file:
+        path: /tmp
+        mode: '1777'
+        state: directory
+      become: true
+      when: enable_wazuh_monitoring | default('no') | bool
+
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
   become: true
