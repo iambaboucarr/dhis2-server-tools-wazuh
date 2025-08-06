@@ -99,7 +99,7 @@ if [ $(cat inventory/hosts  | grep -Po '(?<=ansible_connection=)([a-z].*)') == "
      # Install Wazuh roles if Wazuh monitoring is enabled
      if grep -q "enable_wazuh_monitoring=yes" inventory/hosts; then
        echo "Wazuh monitoring enabled, installing Wazuh Ansible roles..."
-       sudo ansible-galaxy install -r requirements/ansible.yml --force
+       sudo ansible-galaxy install -r ../requirements/ansible.yml --force
      fi
      
      sudo ansible-playbook dhis2.yml
@@ -110,7 +110,7 @@ if [ $(cat inventory/hosts  | grep -Po '(?<=ansible_connection=)([a-z].*)') == "
      # Install Wazuh roles if Wazuh monitoring is enabled
      if grep -q "enable_wazuh_monitoring=yes" inventory/hosts; then
        echo "Wazuh monitoring enabled, installing Wazuh Ansible roles..."
-       ansible-galaxy install -r requirements/ansible.yml --force
+       ansible-galaxy install -r ../requirements/ansible.yml --force
      fi
      
      read -p "Enter ssh user: " ssh_user
