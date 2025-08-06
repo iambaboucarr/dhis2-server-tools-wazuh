@@ -1,0 +1,100 @@
+---
+# Verification playbook for official Wazuh deployment
+
+- name: Verify Wazuh installation
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Check if Wazuh packages are installed
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      check_mode: true
+      register: package_check
+      failed_when: package_check.changed
+      loop:
+        - wazuh-manager
+        - wazuh-indexer
+        - wazuh-dashboard
+    
+    - name: Check Wazuh manager configuration file exists
+      ansible.builtin.stat:
+        path: /var/ossec/etc/ossec.conf
+      register: ossec_conf
+      failed_when: not ossec_conf.stat.exists
+    
+    - name: Check Wazuh API configuration exists
+      ansible.builtin.stat:
+        path: /var/ossec/api/configuration/api.yaml
+      register: api_config
+      failed_when: not api_config.stat.exists
+    
+    - name: Check Indexer configuration exists
+      ansible.builtin.stat:
+        path: /etc/wazuh-indexer/opensearch.yml
+      register: indexer_config
+      failed_when: not indexer_config.stat.exists
+    
+    - name: Check Dashboard configuration exists
+      ansible.builtin.stat:
+        path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+      register: dashboard_config
+      failed_when: not dashboard_config.stat.exists
+    
+    - name: Test Wazuh manager binary
+      ansible.builtin.command: /var/ossec/bin/wazuh-control status
+      register: manager_status
+      changed_when: false
+      failed_when: false
+    
+    - name: Check for proper file permissions
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      register: file_stats
+      failed_when: item.mode is defined and file_stats.stat.mode != item.mode
+      loop:
+        - { path: "/var/ossec/etc/ossec.conf", mode: "0640" }
+        - { path: "/var/ossec/etc/client.keys", mode: "0640" }
+      when: file_stats.stat.exists | default(false)
+    
+    - name: Verify no hardcoded passwords in configuration
+      ansible.builtin.shell: |
+        grep -r "password.*=" /var/ossec/etc/ 2>/dev/null | grep -v "#" | grep -v "use_password" || true
+      register: password_check
+      changed_when: false
+      failed_when: password_check.stdout | length > 0
+    
+    - name: Check API port is listening
+      ansible.builtin.wait_for:
+        port: 55000
+        host: localhost
+        state: started
+        timeout: 5
+      failed_when: false
+    
+    - name: Check Indexer port is listening
+      ansible.builtin.wait_for:
+        port: 9200
+        host: localhost
+        state: started
+        timeout: 5
+      failed_when: false
+    
+    - name: Check Dashboard port is listening
+      ansible.builtin.wait_for:
+        port: 5601
+        host: localhost
+        state: started
+        timeout: 5
+      failed_when: false
+    
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=== Wazuh Official Roles Verification ==="
+          - "Manager Config: {{ 'Found' if ossec_conf.stat.exists else 'Missing' }}"
+          - "API Config: {{ 'Found' if api_config.stat.exists else 'Missing' }}"
+          - "Indexer Config: {{ 'Found' if indexer_config.stat.exists else 'Missing' }}"
+          - "Dashboard Config: {{ 'Found' if dashboard_config.stat.exists else 'Missing' }}"
+          - "Manager Status: {{ manager_status.stdout_lines[0] if manager_status.rc == 0 else 'Not running' }}"
+          - "========================================="

@@ -25,8 +25,18 @@ monitor   ansible_host=172.19.2.30
 [integration]
 
 
-# wazuh security monitoring
+# wazuh security monitoring (only used when enable_wazuh_monitoring=yes)
 [wazuh]
+wazuh   ansible_host=172.19.2.40
+
+# Wazuh component groups (only used when enable_wazuh_monitoring=yes)
+[wazuh_managers]
+wazuh   ansible_host=172.19.2.40
+
+[wazuh_indexers]
+wazuh   ansible_host=172.19.2.40
+
+[wazuh_dashboards]
 wazuh   ansible_host=172.19.2.40 
 
 
@@ -54,6 +64,9 @@ postgresql_version=16
 # monitoring
 server_monitoring=munin
 app_monitoring=glowroot
+
+# Wazuh Security Monitoring (set to 'yes' to enable, 'no' to disable)
+enable_wazuh_monitoring=yes
 
 
 # lxd

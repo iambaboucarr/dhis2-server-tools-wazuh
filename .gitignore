@@ -14,9 +14,22 @@ deploy/inventory/group_vars/*
 !deploy/inventory/group_vars/*.template
 deploy/filter_plugins/__pycache__/
 
+# Ansible Vault files
+deploy/vars/vault.yml
+deploy/vars/*.vault
+*.vault
+vault.yml
+
 # Testing artifacts
 .molecule/
 .cache/
 *.pyc
 __pycache__/
 molecule/*/tests/__pycache__/
+
+# Ansible artifacts
+.ansible/
+collections/
+**/collections/ansible_collections/
+*.retry
+.galaxy_cache/

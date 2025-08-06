@@ -1,19 +1,22 @@
 ---
-# Wazuh-only scenario - Test just the Wazuh server deployment
+# Molecule scenario for testing official Wazuh Ansible roles
 dependency:
   name: galaxy
+  options:
+    requirements-file: requirements.yml
+    force: true
 
 driver:
   name: docker
 
 platforms:
-  - name: wazuh-standalone
-    image: quay.io/ansible/molecule-ubuntu:22.04
+  - name: wazuh-single-node
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
     privileged: true
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     cgroupns_mode: host
-    command: /sbin/init
+    command: /lib/systemd/systemd
     tmpfs:
       - /run
       - /tmp
@@ -21,9 +24,11 @@ platforms:
       - SYS_ADMIN
     environment:
       DEBIAN_FRONTEND: noninteractive
-    published_ports:
-      - "55001:55000"  # Wazuh API (different port to avoid conflicts)
-      - "1515:1514"    # Wazuh Agent Port
+    # Note: Ports not published for security - internal access only
+    groups:
+      - wazuh_managers
+      - wazuh_indexers
+      - wazuh_dashboards
 
 provisioner:
   name: ansible
@@ -32,26 +37,24 @@ provisioner:
       callbacks_enabled: junit, yaml, timer
       stdout_callback: yaml
       host_key_checking: false
+      interpreter_python: auto_silent
   inventory:
     group_vars:
       all:
         ansible_python_interpreter: /usr/bin/python3
-        ansible_connection: docker
-        wazuh_version: "4.12.0"
-        wazuh_api_password: "StandaloneTest123!"
-        wazuh_authd_pass: "StandaloneAuth123!"
-        wazuh_container_network: "172.21.0.0"
-        wazuh_container_cidr: "172.21.0.0/16"
-        
-    groups:
-      wazuh:
-        - wazuh-standalone
+        single_node: true
+        wazuh_manager_version: "4.12.0-1"
+        indexer_jvm_heap_size: "512m"  # Reduced for testing
+        generate_certificates: true
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
 
 verifier:
   name: ansible
 
 scenario:
-  name: wazuh-only
+  name: wazuh
   test_sequence:
     - dependency
     - cleanup

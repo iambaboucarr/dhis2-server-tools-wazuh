@@ -1,0 +1,34 @@
+---
+# Ansible Vault encrypted variables example
+# Copy this file to vault.yml and encrypt with: ansible-vault encrypt vars/vault.yml
+# 
+# SECURITY BEST PRACTICES:
+# 1. Never commit vault.yml to version control (it's in .gitignore)
+# 2. Use strong passwords (minimum 16 characters, mixed case, numbers, special characters)
+# 3. Rotate secrets regularly (quarterly recommended)
+# 4. Use different passwords for each environment (dev/staging/prod)
+
+# Wazuh Security Configuration
+vault_wazuh_api_password: "ChangeMe#2024$Secure!"
+vault_wazuh_cluster_key: "ReplaceWithSecure32CharacterKey!"
+vault_wazuh_authd_pass: "AuthenticationKey2024!"
+vault_wazuh_indexer_admin_password: "IndexerAdmin#2024!"
+vault_wazuh_dashboard_admin_password: "Dashboard#Admin2024!"
+
+# Certificate Configuration  
+vault_wazuh_ca_pass: "CAPassword#2024!"
+vault_wazuh_node_cert_pass: "NodeCert#2024!"
+
+# Agent Registration
+vault_wazuh_agent_enrollment_password: "AgentEnroll#2024!"
+
+# Database Credentials (if using external DB)
+vault_wazuh_db_password: "Database#2024!"
+vault_wazuh_db_root_password: "DBRoot#2024!"
+
+# API Keys for Integrations
+vault_wazuh_slack_webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+vault_wazuh_pagerduty_api_key: "YOUR_PAGERDUTY_API_KEY"
+
+# DHIS2 Integration
+vault_dhis2_wazuh_api_key: "DHIS2Integration#2024!"

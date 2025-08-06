@@ -14,7 +14,7 @@ on:
       scenarios:
         description: 'Comma-separated list of scenarios to run (default: all)'
         required: false
-        default: 'default,wazuh-only'
+        default: 'default,wazuh'
       verbose:
         description: 'Enable verbose output'
         required: false
@@ -73,7 +73,7 @@ jobs:
       matrix:
         scenario:
           - default
-          - wazuh-only
+          - wazuh
           # - full-stack  # Commented out for resource constraints in CI
     
     steps:
@@ -225,7 +225,7 @@ jobs:
           echo "" >> test-report.md
           echo "## Scenarios Tested" >> test-report.md
           echo "- default: Basic Wazuh + DHIS2 integration" >> test-report.md
-          echo "- wazuh-only: Standalone Wazuh server deployment" >> test-report.md
+          echo "- wazuh: Wazuh security monitoring integration" >> test-report.md
           echo "" >> test-report.md
           echo "Generated on: $(date)" >> test-report.md
 
