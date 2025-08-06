@@ -32,6 +32,16 @@
   vars_files:
     - vars/vars.yml
   tasks:
+    - name: Debug Wazuh container creation variables
+      ansible.builtin.debug:
+        msg:
+          - "inventory_hostname: {{ inventory_hostname }}"
+          - "ansible_host: {{ ansible_host }}"
+          - "group_names: {{ group_names }}"
+          - "ansible_connection: {{ hostvars[inventory_hostname]['ansible_connection'] | default('undefined') }}"
+          - "lxd_network: {{ lxd_network | default('undefined') }}"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Create Wazuh container (following DHIS2 pattern)
       become: true
       vars:
@@ -63,6 +73,13 @@
         - hostvars[inventory_hostname]['ansible_connection'] | default('') == 'lxd'
       delegate_to: 127.0.0.1
       register: create_wazuh_container_status
+
+    - name: Debug container creation result
+      ansible.builtin.debug:
+        var: create_wazuh_container_status
+      when: 
+        - enable_wazuh_monitoring | default('no') | bool
+        - create_wazuh_container_status is defined
 
     - name: Gather facts for Wazuh container
       ansible.builtin.setup:
