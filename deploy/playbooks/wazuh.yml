@@ -362,6 +362,96 @@
           - "!min"
       when: enable_wazuh_monitoring | default('no') | bool
 
+    - name: Create certificates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /opt/wazuh-certs-tool
+        - /opt/wazuh-certificates
+      delegate_to: localhost
+      become: true
+      run_once: true
+
+    - name: Download Wazuh certificates tool
+      ansible.builtin.get_url:
+        url: "https://packages.wazuh.com/4.12/wazuh-certs-tool.sh"
+        dest: /opt/wazuh-certs-tool/wazuh-certs-tool.sh
+        mode: '0755'
+      delegate_to: localhost
+      become: true
+      run_once: true
+
+    - name: Create certificates configuration file
+      ansible.builtin.copy:
+        content: |
+          nodes:
+            # Wazuh indexer nodes
+            indexer:
+              - name: wazuh
+                ip: {{ ansible_default_ipv4.address }}
+
+            # Wazuh server nodes
+            server:
+              - name: wazuh
+                ip: {{ ansible_default_ipv4.address }}
+
+            # Wazuh dashboard nodes
+            dashboard:
+              - name: wazuh
+                ip: {{ ansible_default_ipv4.address }}
+        dest: /opt/wazuh-certs-tool/config.yml
+        mode: '0644'
+      delegate_to: localhost
+      become: true
+      run_once: true
+
+    - name: Generate Wazuh certificates
+      ansible.builtin.shell: |
+        cd /opt/wazuh-certs-tool
+        ./wazuh-certs-tool.sh -A
+      delegate_to: localhost
+      become: true
+      run_once: true
+      creates: /opt/wazuh-certs-tool/wazuh-certificates.tar
+
+    - name: Extract certificates
+      ansible.builtin.unarchive:
+        src: /opt/wazuh-certs-tool/wazuh-certificates.tar
+        dest: /opt/wazuh-certificates/
+        remote_src: yes
+      delegate_to: localhost
+      become: true
+      run_once: true
+      creates: /opt/wazuh-certificates/wazuh
+
+    - name: Create playbook certificates directory
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/indexer/certificates/wazuh-certificates"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Copy certificates to playbook directory
+      ansible.builtin.copy:
+        src: "/opt/wazuh-certificates/wazuh/{{ item }}"
+        dest: "{{ playbook_dir }}/indexer/certificates/wazuh-certificates/{{ item }}"
+        remote_src: yes
+        mode: '0644'
+      delegate_to: localhost
+      become: true
+      run_once: true
+      loop:
+        - root-ca.pem
+        - root-ca.key  
+        - wazuh-key.pem
+        - wazuh.pem
+        - admin-key.pem
+        - admin.pem
+      ignore_errors: yes
+
     - name: Configure firewall for Indexer (internal network only)
       community.general.ufw:
         rule: allow
