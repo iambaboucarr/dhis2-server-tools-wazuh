@@ -145,7 +145,7 @@
         format: "json"
 
       authd:
-        enable: true
+        enable: "yes"
         port: 1515
         use_password: "yes"
         password: >-
@@ -255,6 +255,17 @@
           - libcap2-bin
         state: present
         update_cache: true
+
+    - name: Ensure Wazuh authd password file exists
+      ansible.builtin.copy:
+        content: "{{ vault_wazuh_authd_pass | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}"
+        dest: /var/ossec/etc/authd.pass
+        owner: root
+        group: wazuh
+        mode: '0640'
+      when: 
+        - enable_wazuh_monitoring | default('no') | bool
+      ignore_errors: yes
 
     - name: Configure firewall for Wazuh manager (internal network only)
       community.general.ufw:
