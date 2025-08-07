@@ -411,10 +411,11 @@
       ansible.builtin.shell: |
         cd /opt/wazuh-certs-tool
         ./wazuh-certs-tool.sh -A
+      args:
+        creates: /opt/wazuh-certs-tool/wazuh-certificates.tar
       delegate_to: localhost
       become: true
       run_once: true
-      creates: /opt/wazuh-certs-tool/wazuh-certificates.tar
 
     - name: Extract certificates
       ansible.builtin.unarchive:
