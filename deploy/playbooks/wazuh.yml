@@ -32,7 +32,7 @@
   vars_files:
     - vars/vars.yml
   tasks:
-    - name: Create Wazuh container (following DHIS2 pattern)
+    - name: Create Wazuh container
       become: true
       vars:
         ansible_connection: local
@@ -58,12 +58,21 @@
             parent: "{{ lxd_bridge_interface | default('lxdbr1') }}"
             type: nic
             ipv4.address: "{{ ansible_host | ansible.utils.ipaddr(lxd_network) }}"
-      when: 
+      when:
         - enable_wazuh_monitoring | default('no') | bool
         - hostvars[inventory_hostname]['ansible_connection'] | default('') == 'lxd'
       delegate_to: 127.0.0.1
       register: create_wazuh_container_status
 
+    - name: Wait for systemd to be ready in Wazuh container
+      ansible.builtin.wait_for:
+        path: /run/systemd/system
+        state: present
+        timeout: 30
+      become: true
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - create_wazuh_container_status.changed
 
     - name: Gather facts for Wazuh container
       ansible.builtin.setup:
@@ -86,21 +95,20 @@
       delegate_to: 127.0.0.1
       register: restart_wazuh_container_status
 
-    - name: Wait for systemd to be ready in Wazuh container
+    - name: Wait for systemd after restart
       ansible.builtin.wait_for:
         path: /run/systemd/system
         state: present
         timeout: 10
       become: true
-      when: 
+      when:
         - enable_wazuh_monitoring | default('no') | bool
-        - create_wazuh_container_status.changed or restart_wazuh_container_status.changed
+        - restart_wazuh_container_status.changed
 
     - name: Ensure timezone is {{ timezone }}
       community.general.timezone:
         name: "{{ timezone }}"
       when: enable_wazuh_monitoring | default('no') | bool
-
 
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
@@ -184,7 +192,7 @@
           {{- '!@#$' }}
       delegate_to: 127.0.0.1
       run_once: true
-      when: 
+      when:
         - enable_wazuh_monitoring | default('no') | bool
         - vault_wazuh_api_password is not defined
 
@@ -197,7 +205,7 @@
           {{- '!@#%' }}
       delegate_to: 127.0.0.1
       run_once: true
-      when: 
+      when:
         - enable_wazuh_monitoring | default('no') | bool
         - vault_wazuh_indexer_admin_password is not defined
 
@@ -207,21 +215,21 @@
           # Wazuh Security Credentials - KEEP SECURE!
           # Generated: {{ ansible_date_time.iso8601 }}
           # Store these credentials securely and delete this file after saving
-          
+
           Wazuh API Admin Password: {{ wazuh_api_password | default('Not generated - using vault') }}
           Wazuh Indexer Admin Password: {{ wazuh_indexer_password | default('Not generated - using vault') }}
-          
+
           # For production, encrypt these in vault:
           # ansible-vault encrypt_string '{{ wazuh_api_password | default("YOUR_PASSWORD") }}' --name 'vault_wazuh_api_password'
           # ansible-vault encrypt_string '{{ wazuh_indexer_password | default("YOUR_PASSWORD") }}' --name 'vault_wazuh_indexer_admin_password'
         dest: /opt/ansible/secrets/wazuh_credentials.txt
-        mode: '0400'
+        mode: "0400"
         owner: root
         group: root
       become: true
       delegate_to: 127.0.0.1
       run_once: true
-      when: 
+      when:
         - enable_wazuh_monitoring | default('no') | bool
         - (wazuh_api_password is defined or wazuh_indexer_password is defined)
 
@@ -271,7 +279,7 @@
         - enable_wazuh_monitoring | default('no') | bool
         - single_node or inventory_hostname in groups['wazuh_managers']
 
-- name: Deploy Wazuh Indexer (OpenSearch)  
+- name: Deploy Wazuh Indexer (OpenSearch)
   hosts: wazuh_indexers
   become: true
   gather_facts: false
