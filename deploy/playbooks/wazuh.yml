@@ -126,7 +126,7 @@
       {{ vault_wazuh_authd_pass
         | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
 
-    # Wazuh cluster instances configuration for certificates
+    # Wazuh single-node instances configuration for certificates
     instances:
       - name: wazuh
         ip: "{{ ansible_default_ipv4.address }}"
@@ -328,13 +328,6 @@
   become: true
   gather_facts: false
   vars:
-    # Wazuh cluster instances configuration
-    instances:
-      - name: wazuh
-        ip: "{{ ansible_default_ipv4.address }}"
-        role: indexer
-        node_type: worker
-    
     indexer_cluster_name: "wazuh-cluster"
     indexer_node_name: "{{ ansible_hostname }}"
     indexer_network_host: "{{ ansible_default_ipv4.address }}" # Bind to internal IP only
@@ -391,13 +384,6 @@
   become: true
   gather_facts: false
   vars:
-    # Wazuh cluster instances configuration
-    instances:
-      - name: wazuh
-        ip: "{{ ansible_default_ipv4.address }}"
-        role: dashboard
-        node_type: worker
-    
     # Bind to container IP if LXD, localhost otherwise (for SSH forwarding)
     dashboard_server_host: >-
       {{ ansible_default_ipv4.address if ansible_connection == 'lxd' else '127.0.0.1' }}
