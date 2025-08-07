@@ -64,6 +64,13 @@
       delegate_to: 127.0.0.1
       register: create_wazuh_container_status
 
+    - name: Pause to allow container to fully initialize
+      ansible.builtin.pause:
+        seconds: 5
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - create_wazuh_container_status.changed
+
     - name: Get facts from Wazuh container
       ansible.builtin.setup:
         gather_subset:
@@ -104,7 +111,7 @@
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
   become: true
-  gather_facts: true
+  gather_facts: false
   vars_files:
     - vars/vars.yml
   vars:
@@ -160,6 +167,13 @@
       - "{{ hostvars[groups['wazuh_indexers'][0]]['ansible_default_ipv4']['address'] }}:9200"
 
   pre_tasks:
+    - name: Gather facts from Wazuh container
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Clean up old password files to regenerate with proper complexity
       ansible.builtin.file:
         path: "{{ item }}"
@@ -570,6 +584,13 @@
         run_on_start: "yes"
 
   pre_tasks:
+    - name: Gather facts from DHIS2 containers
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Ensure Wazuh manager is reachable from LXD containers
       ansible.builtin.wait_for:
         host: "{{ hostvars[groups['wazuh_managers'][0]]['ansible_default_ipv4']['address'] }}"
