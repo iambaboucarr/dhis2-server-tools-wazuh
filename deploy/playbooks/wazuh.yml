@@ -294,6 +294,22 @@
       when:
         - enable_wazuh_monitoring | default('no') | bool
         - single_node or inventory_hostname in groups['wazuh_managers']
+  
+  post_tasks:
+    - name: Fix Wazuh configuration booleans
+      ansible.builtin.shell: |
+        sed -i 's/>True</>yes</g' /var/ossec/etc/ossec.conf
+        sed -i 's/>False</>no</g' /var/ossec/etc/ossec.conf
+      when: enable_wazuh_monitoring | default('no') | bool
+      ignore_errors: yes
+    
+    - name: Ensure Wazuh Manager is running
+      ansible.builtin.systemd:
+        name: wazuh-manager
+        state: started
+        enabled: yes
+      when: enable_wazuh_monitoring | default('no') | bool
+      ignore_errors: yes
 
 - name: Deploy Wazuh Indexer (OpenSearch)
   hosts: wazuh_indexers
