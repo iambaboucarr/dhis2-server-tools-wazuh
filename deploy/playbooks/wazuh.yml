@@ -64,6 +64,15 @@
       delegate_to: 127.0.0.1
       register: create_wazuh_container_status
 
+    - name: Get facts from Wazuh container
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - create_wazuh_container_status.changed
+
     - name: Wait for systemd to be ready in Wazuh container
       ansible.builtin.wait_for:
         path: /run/systemd/system
