@@ -147,7 +147,7 @@
       authd:
         enable: true
         port: 1515
-        use_password: true
+        use_password: "yes"
         password: >-
           {{ vault_wazuh_authd_pass
             | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
