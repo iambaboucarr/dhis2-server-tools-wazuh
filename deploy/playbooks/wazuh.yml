@@ -71,7 +71,22 @@
           - "!min"
       when:
         - enable_wazuh_monitoring | default('no') | bool
-        - create_wazuh_container_status.changed
+      tags: [always]
+
+    - name: Ensure container has configured static IP address
+      become: true
+      vars:
+        ansible_connection: local
+      community.general.lxd_container:
+        name: "{{ inventory_hostname }}"
+        state: restarted
+        wait_for_ipv4_addresses: true
+      when:
+        - enable_wazuh_monitoring | default('no') | bool
+        - hostvars[inventory_hostname]['ansible_connection'] | default('') == 'lxd'
+        - ansible_host != ansible_facts['default_ipv4']['address']
+      delegate_to: 127.0.0.1
+      register: restart_wazuh_container_status
 
     - name: Wait for systemd to be ready in Wazuh container
       ansible.builtin.wait_for:
@@ -81,7 +96,7 @@
       become: true
       when:
         - enable_wazuh_monitoring | default('no') | bool
-        - create_wazuh_container_status.changed
+        - create_wazuh_container_status.changed or restart_wazuh_container_status.changed
 
 
 
