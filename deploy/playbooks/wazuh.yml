@@ -334,6 +334,16 @@
     indexer_http_port: 9200
     indexer_transport_tcp_port: 9300
 
+    # Single node deployment (set to false for cluster)
+    single_node: true
+
+    # Wazuh single-node instances configuration for certificates
+    instances:
+      - name: wazuh
+        ip: "{{ ansible_default_ipv4.address }}"
+        role: wazuh
+        node_type: master
+
     # Security configuration
     indexer_security_enabled: true
     indexer_security_admin_password: >-
@@ -384,6 +394,16 @@
   become: true
   gather_facts: false
   vars:
+    # Single node deployment (set to false for cluster)
+    single_node: true
+
+    # Wazuh single-node instances configuration for certificates
+    instances:
+      - name: wazuh
+        ip: "{{ ansible_default_ipv4.address }}"
+        role: wazuh
+        node_type: master
+
     # Bind to container IP if LXD, localhost otherwise (for SSH forwarding)
     dashboard_server_host: >-
       {{ ansible_default_ipv4.address if ansible_connection == 'lxd' else '127.0.0.1' }}
