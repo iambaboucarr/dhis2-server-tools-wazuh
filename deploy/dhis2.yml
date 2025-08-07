@@ -43,4 +43,4 @@
     - role: backups
 
 - name: Deploy Wazuh Security Monitoring
-  ansible.builtin.import_playbook: wazuh.yml
+  ansible.builtin.import_playbook: playbooks/wazuh.yml
