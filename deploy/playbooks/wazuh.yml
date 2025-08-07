@@ -121,6 +121,11 @@
     # Single node deployment (set to false for cluster)
     single_node: true
 
+    # Fix for authd password template variable
+    authd_pass: >-
+      {{ vault_wazuh_authd_pass
+        | default(lookup('password', '/tmp/wazuh_authd_pass length=20 chars=ascii_letters,digits')) }}
+
     # Wazuh manager configuration
     wazuh_manager_config:
       cluster:
