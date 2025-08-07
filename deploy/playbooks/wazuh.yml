@@ -76,10 +76,6 @@
 
 
 
-    - name: Ensure timezone is {{ timezone }}
-      community.general.timezone:
-        name: "{{ timezone }}"
-      when: enable_wazuh_monitoring | default('no') | bool
 
 - name: Deploy Wazuh single-node or cluster using official roles
   hosts: wazuh_managers
