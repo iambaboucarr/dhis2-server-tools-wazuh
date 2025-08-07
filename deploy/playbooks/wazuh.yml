@@ -140,6 +140,13 @@
       - "{{ hostvars[groups['wazuh_indexers'][0]]['ansible_default_ipv4']['address'] }}:9200"
 
   pre_tasks:
+    - name: Gather facts for Wazuh manager
+      ansible.builtin.setup:
+        gather_subset:
+          - network
+          - "!min"
+      when: enable_wazuh_monitoring | default('no') | bool
+
     - name: Clean up old password files to regenerate with proper complexity
       ansible.builtin.file:
         path: "{{ item }}"
