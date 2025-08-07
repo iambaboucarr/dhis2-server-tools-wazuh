@@ -128,7 +128,8 @@
 
     # Wazuh single-node instances configuration for certificates
     instances:
-      - name: wazuh
+      wazuh:
+        name: wazuh
         ip: "{{ ansible_default_ipv4.address }}"
         role: wazuh
         node_type: master
@@ -339,7 +340,8 @@
 
     # Wazuh single-node instances configuration for certificates
     instances:
-      - name: wazuh
+      wazuh:
+        name: wazuh
         ip: "{{ ansible_default_ipv4.address }}"
         role: wazuh
         node_type: master
@@ -399,7 +401,8 @@
 
     # Wazuh single-node instances configuration for certificates
     instances:
-      - name: wazuh
+      wazuh:
+        name: wazuh
         ip: "{{ ansible_default_ipv4.address }}"
         role: wazuh
         node_type: master
